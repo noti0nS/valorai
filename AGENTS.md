@@ -1,10 +1,18 @@
 # ValorAI
 
 ## Repository state and sources
-- This is a requirements/branding repository, not an implemented application. There are no manifests, build/test scripts, CI workflows, or selected application stack; do not invent setup commands or assume a framework.
+- This repository contains the requirements/branding materials and an Astro + React registration prototype, implemented on 29/10/2026. The prototype API is a Cloudflare Worker with D1, a SQLite Durable Object, and Turnstile. See `README.md` and the two `package.json` files for actual setup/build/test/deploy commands; there is no CI workflow.
 - Read `docs/Ata_de_Reuniao_ValorAl_v1.3.docx` for the latest consolidated requirements and `entrevista_valorai.pdf` for the elicited product scope.
 - `docs/Ata_de_Reuniao_ValorAl.docx` contains version 1.2 despite its unversioned name. The original PDF, `_original.docx`, `_v1.1.docx`, and `docs/revision_ata.md` are historical; the Markdown review is not a current requirements specification.
 - Logos are `assets/Nulfinance_Inc.svg` (company) and `assets/ValorAI.svg` (product).
+
+## Prototype development
+- Node 24.22+ in the 24.x line is supported by the current Cloudflare CLI; use `npm ci` at the root and in `server`. Check `engines` for other supported Node lines.
+- Use `cf` and `server/cloudflare.config.ts`. Root `npm run build` builds Astro before packaging the Worker with its static assets. Root `npm run deploy` builds and deploys that output.
+- Local Worker development listens on `127.0.0.1:8787` and serves root `dist/`; rebuild the frontend before browser tests. Astro's dev server proxies `/api` to that Worker.
+- Email confirmation is intentionally simulated, as authorized for this prototype. `/api/demo-inbox` is restricted to the account's pending session, and confirmed accounts are `demo_confirmed`, never email-verified.
+- Confirmation limits in code are prototype assumptions pending requirements validation. Turnstile is enforced in production and bypassed only in local development mode. Store its secret in Cloudflare, never in source files.
+- The implementation is a registration slice, not the whole MVP. RF003/RF008, financial transactions/imports/receipt extraction, and unresolved requirements are not completed by this prototype.
 
 ## Requirements traps
 - Keep the RF/RNF convention: RF describe bounded user goals; their validation rules stay attached to them; technical protection and quality constraints are transversal RNF.
