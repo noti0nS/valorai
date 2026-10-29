@@ -1,0 +1,16 @@
+# Office lock files and temporary documents
+.~lock.*#
+~$*
+*.tmp
+
+# OS metadata
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
