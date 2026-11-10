@@ -1,42 +1,48 @@
 # ValorAI
 
-Protótipo de cadastro em **Astro + React**, com a identidade visual do ValorAI e da Nulfinance Inc.
+Protótipo funcional de cadastro e gestão financeira em **Astro + React** e **Django no Cloudflare Python Worker**, com a identidade visual do ValorAI e da Nulfinance Inc. (sistema de design Stitch).
 
-**Acessar:** https://valorai-prototype.joselucas0303.workers.dev
+- **Acessar:** https://valorai-prototype.joselucas0303.workers.dev
+- **Arquitetura e Decisões Técnicas:** Veja [**ARCHITECTURE.md**](ARCHITECTURE.md) e os registros de arquitetura em [`docs/adr/0001-django-workers-architecture.md`](docs/adr/0001-django-workers-architecture.md) e [`docs/adr/0002-dashboard-ledger-and-stitch-workspace.md`](docs/adr/0002-dashboard-ledger-and-stitch-workspace.md).
 
-A tela inicial é o **login**. A opção **Criar conta** abre o cadastro abaixo; sessões existentes retomam o painel ou a etapa pendente.
+A tela inicial é o **login**. A opção **Criar conta** abre o cadastro abaixo; sessões existentes retomam o painel financeiro operacional ou a etapa pendente.
 
 ```text
-Dados pessoais → Acesso → Confirmação simulada → Perfil financeiro → Painel
-                                                                      ↕
-                                                       Entrar / sair / ajustar perfil
+Dados pessoais → Acesso → Confirmação simulada → Perfil financeiro → Painel Stitch (Visão Geral, Extratos, Metas e Guias)
+                                                                       ↕
+                                                       Entrar / sair / manter perfil (RF003) / lançamentos
 ```
 
 ## O que funciona
 
-- Cadastro persistido: nome, CPF, nascimento, celular, CEP, UF, cidade, e-mail e senha. Validação compartilhada entre navegador e servidor, CPF/e-mail únicos e idade mínima de 16 anos.
+- Cadastro persistido: nome, CPF, nascimento, celular, CEP, UF, cidade, e-mail, senha e foto de perfil opcional (PNG/JPEG até 2 MB). Validação compartilhada entre navegador e servidor, CPF/e-mail únicos e idade mínima de 16 anos.
 - Consulta de CEP pelo ViaCEP e sugestões de municípios pelo IBGE; preenchimento manual disponível quando os serviços falham.
 - Confirmação por código de uso único em uma **caixa de demonstração**, acessível apenas à sessão da conta pendente.
-- Renda, gastos fixos e objetivo financeiro, com edição posterior e painel de estimativas.
-- Login por CPF/e-mail, sessão retomada ao recarregar, logout e desativação com revogação das sessões.
-- Três guias educativos pré-carregados por migração, sem interface administrativa.
-- Layout responsivo, campos rotulados, foco de teclado, diálogos nativos e respeito à preferência por movimento reduzido.
+- Manutenção do perfil cadastral (**RF003**): edição de dados pessoais, endereço e avatar mantendo CPF e e-mail imutáveis.
+- Renda, gastos fixos, objetivo financeiro e metas com registro de aportes e acompanhamento de progresso.
+- **Três canais de entrada de transações**: digitação manual, importação de extratos **OFX e CSV**, e leitura de comprovantes por **OCR/IA** com revisão antes de salvar.
+- Categorização obrigatória em todos os lançamentos com sugestão automática por palavras-chave e distribuição visual por categoria.
+- Limites de gastos configuráveis por categoria e período (`diário`, `semanal`, `mensal`) com **alertas visuais não bloqueantes** ao atingir 80%, 100% ou exceder o teto.
+- Login por CPF/e-mail, sessão retomada ao recarregar, logout e desativação com revogação das sessões e preservação do histórico financeiro.
+- Três guias educativos pré-carregados por migração com leitura interativa e marcação de conclusão, sem interface administrativa.
+- Layout responsivo seguindo o design Stitch (`Visão Geral`, `Transações & Extratos`, `Planejamento & Metas`, `Guias Práticos`), campos rotulados, foco de teclado, diálogos nativos (`<dialog closedby="any">`) e respeito à preferência por movimento reduzido.
 
 ### Limites deste recorte
 
-A referência é a ATA **v1.3** em `docs/Ata_de_Reuniao_ValorAl_v1.3.docx`. Esta implementação de 29/10/2026 não altera a ata nem transforma decisões técnicas em requisitos aprovados.
+As referências de requisitos são a ATA **v1.3** em `docs/Ata_de_Reuniao_ValorAl_v1.3.docx` e `docs/valorai_requisitos.docx`. As implementações do protótipo não alteram a ata original de 22/10/2026 nem transformam decisões técnicas provisórias em requisitos aprovados.
 
 | Requisito de trabalho | Cobertura no protótipo |
 | --- | --- |
 | RF001 — Cadastro | Fluxo inicial e persistência |
 | RF002 — Confirmação de e-mail | Simulação autorizada; não verifica titularidade |
-| RF003 — Manutenção cadastral | Pendente; edição aqui é apenas do perfil financeiro |
-| RF004 — Perfil financeiro | Renda, gastos fixos e objetivo |
-| RF005 — Desativação | Exclusão lógica; dados preservados e sessões revogadas |
+| RF003 — Manutenção cadastral | Edição de dados pessoais, endereço e avatar (CPF e e-mail imutáveis) |
+| RF004 — Perfil financeiro | Renda, gastos fixos, objetivo e metas |
+| RF005 — Desativação | Exclusão lógica; dados financeiros preservados e sessões revogadas |
 | RF006/RF007 — Login/sessões | Login, timeout, retomada e logout |
 | RF008 — Recuperação de senha | Pendente |
+| Gestão Financeira (Dashboard) | Lançamentos (manual, OFX/CSV, recibo OCR), categorias, limites com alertas não bloqueantes, aportes em metas e progresso nos guias |
 
-Lançamentos, categorias, limites/alertas, importação CSV/Excel/OFX e leitura de recibos por IA pertencem às próximas etapas. A diferença entre renda e gastos fixos não é saldo bancário. A opção “Começar a investir” é apenas um objetivo, sem perfil de investidor ou recomendação financeira.
+A diferença entre renda e gastos fixos e o saldo projetado no painel são instrumentos de planejamento, não saldo bancário sincronizado via Open Finance. A opção “Começar a investir” é apenas um objetivo, sem perfil de investidor ou recomendação financeira.
 
 ## Confirmação demonstrativa
 
@@ -140,17 +146,21 @@ Após publicar, confira o site, `/api/config`, a presença do Turnstile e um cad
 ## Estrutura e referência visual
 
 ```text
+ARCHITECTURE.md            Visão geral da arquitetura, módulos, banco D1 e rotas da API
 assets/                    Logos originais
+.stitch/                   Sistema de design Stitch (DESIGN.md) e telas de referência
 src/pages/index.astro      Página, metadados e hidratação
-src/components/            Fluxo React e componentes de interface
-src/styles/                Identidade visual e responsividade
-shared/validation.ts       Validações e objetivos compartilhados
-server/python/             API Django no Python Worker
-server/migrations/         Esquema D1 e conteúdo educativo
-tests/                     Validações e integração com navegador/API
-docs/                      Atas e documentos históricos
+src/components/            Fluxo React de cadastro (RegistrationApp) e painel Stitch (DashboardWorkspace)
+src/styles/                Identidade visual, Bento grid e responsividade
+shared/validation.ts       Validações, categorias e objetivos compartilhados
+server/python/             API Django no Python Worker (Account, Session, Confirmation, Finance, Ledger)
+server/migrations/         Esquema D1 (0001_initial.sql e 0002_dashboard_ledger.sql) e conteúdo educativo
+tests/                     Validações e suíte E2E de navegador/API (Playwright)
+docs/                      Atas, requisitos e ADRs (docs/adr/)
 ```
 
-Redesign de 29/10/2026: paleta derivada da marca (sálvia `#7E9F8C` e grafite `#242830`), fonte Instrument Sans hospedada junto ao site, textos com tamanho mínimo de 12 px e contraste adequado. O painel lateral do login e do cadastro é uma **ilustração** dos canais previstos (manual, CSV/Excel/OFX e foto de comprovante), das categorias e de um limite atingido que apenas alerta; não representa funcionalidade implementada.
+Para detalhes completos da topologia de execução no Cloudflare, módulos de domínio, esquema de dados e histórico de decisões arquiteturais, consulte [**ARCHITECTURE.md**](ARCHITECTURE.md), [**ADR 0001**](docs/adr/0001-django-workers-architecture.md) e [**ADR 0002**](docs/adr/0002-dashboard-ledger-and-stitch-workspace.md).
+
+Redesign de 29/10/2026 e Painel Stitch de 10/11/2026: paleta derivada da marca (sálvia `#7E9F8C`, esmeralda `#14281D` e grafite `#242830`), fonte Instrument Sans hospedada junto ao site, textos com tamanho mínimo de 12 px e contraste adequado. Após o login e confirmação, o usuário acessa o painel operacional em Bento Grid (`DashboardWorkspace.tsx`) com suporte aos três canais de lançamento, limites e alertas não bloqueantes, metas e guias educativos.
 
 O **FGL MCP** (https://fglibs.com/mcp) indicou a [NumberFlow](https://github.com/barvian/number-flow), usada para animar os valores do perfil financeiro; o valor formatado também é exposto como texto para leitores de tela. A [Arc Library](https://github.com/kuratlielia/arc-library), encontrada pelo mesmo catálogo, serviu de referência inicial para etapas e cartões de seleção. A interface usa implementação própria em React, `motion` e Lucide.
