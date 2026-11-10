@@ -1,0 +1,33 @@
+lock-version = "1.0"
+created-by = "uv"
+requires-python = ">=3.14.2"
+
+[[packages]]
+name = "asgiref"
+version = "3.13.0"
+wheels = [{ url = "https://files.pythonhosted.org/packages/2e/b0/ec211e1f7966247cb6469158d856bac9aa4c2fe13621bd6a352e4f850453/asgiref-3.13.0-py3-none-any.whl", upload-time = 2026-10-23T08:13:13Z, size = 27593, hashes = { sha256 = "f9596a2434512686473d50f96ff6207fbba49ae1a785dfac614df4aeb085674d" } }]
+
+[[packages]]
+name = "bcrypt"
+version = "5.0.0"
+wheels = [{ url = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/bcrypt-5.0.0-cp314-cp314-pyemscripten_2026_0_wasm32.whl", hashes = { sha256 = "be8dd797737c16ca71c0bbc065a4f9bad2dae5a3f6943d9a4455a4eae195f528" } }]
+
+[[packages]]
+name = "django"
+version = "6.1.3"
+wheels = [{ url = "https://files.pythonhosted.org/packages/77/f2/adbe0352c6673f7b608724be5f69962c80ba1d06f8ed60fa4bfbec258b08/django-6.1.3-py3-none-any.whl", upload-time = 2026-11-03T15:21:19Z, size = 8424610, hashes = { sha256 = "a0530e3fdac55d34ccc5893c36f6c57d7a7083064f3d414537e51473648b3290" } }]
+
+[[packages]]
+name = "django-cf"
+version = "0.2.17"
+wheels = [{ url = "https://files.pythonhosted.org/packages/57/6e/9b88fb52f3f86d8d29dc90ac2723999645a1047c72499ef79c34ecca779f/django_cf-0.2.17-py3-none-any.whl", upload-time = 2026-10-06T04:01:13Z, size = 25704, hashes = { sha256 = "8c51f251de623f6632dc0963f3b56f691556f00d837cc100fa0ed27d27a0db08" } }]
+
+[[packages]]
+name = "sqlparse"
+version = "0.6.1"
+wheels = [{ url = "https://files.pythonhosted.org/packages/df/ff/2fee788e82e75be8f210c65c5d103bf44c880e3769c884652a4cd911b8ba/sqlparse-0.6.1-py3-none-any.whl", upload-time = 2026-11-01T18:06:47Z, size = 51200, hashes = { sha256 = "3be5a72d04c873d690d7c6dedd33d6fae2ef82759881ceec02fc2efd0cba564f" } }]
+
+[[packages]]
+name = "workers-runtime-sdk"
+version = "1.9.6"
+wheels = [{ url = "https://files.pythonhosted.org/packages/58/e4/fffa3f6b3eb91b34dcc06f0b9de016cb90c156ae2a2e944054b02618e981/workers_runtime_sdk-1.9.6-py3-none-any.whl", upload-time = 2026-11-04T07:04:34Z, size = 41483, hashes = { sha256 = "f343880a9c1380dd9b340808df93d584ff3c77428f932e14f4a23c36b7bd1bdc" } }]

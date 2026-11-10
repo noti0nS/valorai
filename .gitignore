@@ -17,6 +17,13 @@ Desktop.ini
 
 # Application output and local state
 node_modules/
+.venv/
+.venv-workers/
+.tools/
+python_modules/
+__pycache__/
+.pytest_cache/
+.wrangler/
 dist/
 .astro/
 .cloudflare/

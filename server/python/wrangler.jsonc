@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "valorai-prototype",
+  "main": "valorai/worker.py",
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": ["python_workers"],
+  "workers_dev": true,
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  "assets": {
+    "directory": "../../dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "valorai-prototype",
+      "database_id": "9186a9b0-dce5-442b-96ee-a3e67b4fe2b0",
+      "migrations_dir": "../migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "AUTH", "class_name": "AuthCoordinator" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AuthCoordinator"] }],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "EMAIL_MODE": "demo",
+    "TURNSTILE_SITE_KEY": ""
+  },
+  "env": {
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production",
+        "EMAIL_MODE": "demo",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAFrPCsARbdASrFUU"
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+[project]
+name = "valorai-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "bcrypt",
+    "django>=5.2",
+    "django-cf>=0.2.17",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "workers-py>=1.17.9",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
