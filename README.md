@@ -55,15 +55,14 @@ Requisitos: **Node 24.22+ na linha 24.x**, npm e navegador moderno. As outras li
 
 ```powershell
 npm ci
-npm --prefix server ci
 npm run build
 ```
 
-Inicialize o D1 **local** a partir da pasta `server`:
+Inicialize o D1 **local** a partir de `server/python`:
 
 ```powershell
-cd server
-npx cf d1 migrations apply 9186a9b0-dce5-442b-96ee-a3e67b4fe2b0 --local --persist-to .cloudflare/state --dir migrations
+cd server/python
+uv run pywrangler d1 migrations apply valorai-prototype --local
 ```
 
 Na raiz, inicie a API e os assets compilados:
@@ -72,7 +71,7 @@ Na raiz, inicie a API e os assets compilados:
 npm run dev:api
 ```
 
-Abra **http://127.0.0.1:8787**. O estado local fica em `server/.cloudflare/`, separado do banco remoto. Para editar o frontend com atualização automática, rode também `npm run dev` em outro terminal e abra o endereço exibido pelo Astro; `/api` é encaminhado ao Worker local. O modo de desenvolvimento dispensa Turnstile, sem credenciais de produção.
+Abra **http://127.0.0.1:8787**. O estado local fica em `server/python/.wrangler/`, separado do banco remoto. Para editar o frontend com atualização automática, rode também `npm run dev` em outro terminal e abra o endereço exibido pelo Astro; `/api` é encaminhado ao Worker local. O modo de desenvolvimento dispensa Turnstile, sem credenciais de produção.
 
 ### Verificações
 
@@ -93,7 +92,7 @@ Verificação em 29/10/2026, após o redesign: cinco testes de validação e doi
 
 ```text
 Navegador → Static Assets: HTML Astro, React, fontes e logos
-          → /api/*: Worker → AuthCoordinator (Durable Object SQLite)
+          → /api/*: Python Worker → AuthCoordinator (Durable Object)
                                 ├── D1: contas, sessões, perfis e guias
                                 ├── Estado temporário: códigos e limites
                                 └── Turnstile: validação de cadastro/login
@@ -120,12 +119,12 @@ Fontes: [Workers e logs](https://developers.cloudflare.com/workers/platform/pric
 
 ### Publicar
 
-`server/cloudflare.config.ts` identifica a conta, o Worker `valorai-prototype`, o D1 e o widget já provisionados. A credencial secreta do Turnstile reside exclusivamente no Worker como `TURNSTILE_SECRET_KEY`; `bindings.secret()` a referencia sem incorporá-la ao build. A site key é pública. Para outra conta, crie os recursos correspondentes e atualize esses identificadores.
+`server/python/wrangler.jsonc` identifica o Worker `valorai-prototype`, o D1 e o ambiente de produção. A credencial secreta do Turnstile fica no Worker como `TURNSTILE_SECRET_KEY` e não entra no repositório. A site key pública está no ambiente `production`. Para outra conta, crie os recursos correspondentes e atualize esses identificadores.
 
-Autentique o CLI com `npx cf auth login` dentro de `server`. Para aplicar novas migrações **remotas**, nessa mesma pasta:
+Autentique o CLI usado pelo `pywrangler`. Para aplicar novas migrações **remotas**, em `server/python`:
 
 ```powershell
-npx cf d1 migrations apply 9186a9b0-dce5-442b-96ee-a3e67b4fe2b0 --dir migrations
+uv run pywrangler d1 migrations apply valorai-prototype --remote
 ```
 
 Depois, na raiz:
@@ -134,7 +133,7 @@ Depois, na raiz:
 npm run deploy
 ```
 
-Esse script executa Astro, `cf build` e `cf deploy --prebuilt --mode production`. O backend empacota `dist/` por meio de `server/vite.config.ts`. Para publicar um build já validado: `npm --prefix server run deploy:built`. Não publique com o modo `development`.
+Esse script executa o build do Astro e `pywrangler deploy --env production`. Não publique com `ENVIRONMENT=development`.
 
 Após publicar, confira o site, `/api/config`, a presença do Turnstile e um cadastro sintético no navegador. Um envio sem token válido deve ser rejeitado pela API.
 
@@ -146,7 +145,7 @@ src/pages/index.astro      Página, metadados e hidratação
 src/components/            Fluxo React e componentes de interface
 src/styles/                Identidade visual e responsividade
 shared/validation.ts       Validações e objetivos compartilhados
-server/src/index.ts        Worker e coordenador de autenticação
+server/python/             API Django no Python Worker
 server/migrations/         Esquema D1 e conteúdo educativo
 tests/                     Validações e integração com navegador/API
 docs/                      Atas e documentos históricos
