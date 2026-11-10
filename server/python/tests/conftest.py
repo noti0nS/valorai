@@ -12,8 +12,9 @@ from valorai.errors import ApiError
 from valorai.finance.module import FinanceModule, to_cents
 from valorai.http import RegistrationApi, admit
 from valorai.kv import MemoryKv
+from valorai.ledger.module import LedgerModule
 from valorai.session.module import SessionModule
-from valorai.storage import MemoryAccounts, MemoryAudit, MemoryLessons, MemorySessions
+from valorai.storage import MemoryAccounts, MemoryAudit, MemoryLedger, MemoryLessons, MemorySessions
 from valorai.throttle import Throttle
 
 NOW = int(datetime(2026, 10, 29, 12, tzinfo=timezone.utc).timestamp())
@@ -69,10 +70,17 @@ def world(clock):
     confirmation = ConfirmationModule(kv, clock, lambda: 42)
     finance = FinanceModule(accounts, clock, audit)
     throttle = Throttle(kv, clock)
-    lessons = MemoryLessons([{"id": "first-budget", "title": "Seu primeiro orçamento", "description": "Um plano", "body": "Liste sua renda", "minutes": 3}])
+    lessons = MemoryLessons([
+        {"id": "first-budget", "title": "Seu primeiro orçamento", "description": "Um plano", "body": "Liste sua renda", "minutes": 3},
+        {"id": "emergency-fund", "title": "Uma reserva, um passo de cada vez", "description": "Tranquilidade", "body": "Comece por uma meta", "minutes": 4},
+        {"id": "due-dates", "title": "Contas em dia, mente tranquila", "description": "Vencimentos", "body": "Liste as contas", "minutes": 3},
+    ])
+    ledger_store = MemoryLedger()
+    ledger = LedgerModule(ledger_store, accounts, lessons, clock, audit)
     bot = OpenBot()
-    api = RegistrationApi(account, session, confirmation, finance, throttle, lessons, bot, clock, "", "demo")
+    api = RegistrationApi(account, session, confirmation, finance, throttle, lessons, bot, clock, "", "demo", ledger=ledger)
     return {
         "api": api, "account": account, "session": session, "confirmation": confirmation, "finance": finance,
+        "ledger": ledger, "ledger_store": ledger_store, "lessons": lessons,
         "accounts": accounts, "audit": audit, "hasher": hasher, "sessions": sessions, "clock": clock, "bot": bot, "kv": kv,
     }

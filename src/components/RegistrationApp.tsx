@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState, type SyntheticEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
-import NumberFlow from '@number-flow/react';
-import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Mail, Target, Wallet, CreditCard, PiggyBank, TrendingUp, X, Info, LoaderCircle, LogOut, BookOpen, CheckCircle2, MapPin, Clock3, CircleAlert, PenLine, FileUp, Camera, BellRing, Tags, RotateCcw } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Mail, Wallet, CreditCard, PiggyBank, TrendingUp, X, Info, LoaderCircle, LogOut, CheckCircle2, MapPin, Clock3, CircleAlert, PenLine, FileUp, Camera, BellRing, RotateCcw } from 'lucide-react';
 import productLogo from '../../assets/ValorAI.svg?url';
 import companyLogo from '../../assets/Nulfinance_Inc.svg?url';
-import { personalSchema, accessSchema, financeSchema, fieldErrors, goals, maskCpf, maskPhone, maskPostal, digits, type Finance } from '../../shared/validation';
+import { personalSchema, accessSchema, financeSchema, fieldErrors, goals, maskCpf, maskPhone, maskPostal, digits, states } from '../../shared/validation';
+import DashboardWorkspace, { LightDismissModal, type AccountSummary, type DashboardData, type DashboardLesson, type ProfileData } from './DashboardWorkspace';
 
-type Account = { id: string; name: string; email: string; city: string; state: string; status: string; completed: boolean; finance: Finance | null };
+type Account = AccountSummary;
 type Config = { emailMode: string; siteKey: string; confirmation: { seconds: number; attempts: number; resendSeconds: number } };
-type Lesson = { id: string; title: string; description: string; body: string; minutes: number };
+type Lesson = DashboardLesson;
 type Values = { name: string; cpf: string; birthDate: string; phone: string; postalCode: string; state: string; city: string; email: string; password: string; confirmPassword: string; demoConsent: boolean };
 const initial: Values = { name: '', cpf: '', birthDate: '', phone: '', postalCode: '', state: '', city: '', email: '', password: '', confirmPassword: '', demoConsent: false };
 const stepNames = ['Dados', 'Acesso', 'Confirmação', 'Perfil'];
-const states = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 const currency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 class ApiError extends Error {
   constructor(message: string, public status: number, public fields?: Record<string, string>) { super(message); }
@@ -62,10 +61,7 @@ function Field({ label, id, error, children, hint, wide = false }: { label: stri
     {error ? <span className="field-error" id={`${id}-help`}><CircleAlert size={13} />{error}</span> : hint ? <span className="field-hint" id={`${id}-help`}>{hint}</span> : null}</div>;
 }
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { ref.current?.showModal(); const prior = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = prior; ref.current?.close(); }; }, []);
-  return <dialog ref={ref} className="modal" onCancel={onClose} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} aria-labelledby="modal-title">
-    <div className="modal-header"><h2 id="modal-title">{title}</h2><button type="button" className="icon-button" onClick={onClose} aria-label="Fechar"><X size={20} /></button></div>{children}</dialog>;
+  return <LightDismissModal title={title} onClose={onClose}>{children}</LightDismissModal>;
 }
 const channelIcon = { manual: PenLine, import: FileUp, photo: Camera };
 const sample = [
@@ -89,12 +85,15 @@ function ProductPreview() {
       <div className="limit-bar" aria-hidden="true"><span /></div>
       <p><BellRing size={15} aria-hidden="true" /><span>Limite atingido. O alerta avisa; nenhum pagamento é bloqueado.</span></p>
     </div>
-    <p className="preview-foot">Ilustração do produto. Este protótipo cobre o cadastro e o perfil financeiro; lançamentos, importação, comprovantes e alertas vêm nas próximas etapas.</p>
+    <p className="preview-foot">Ilustração do produto. Este protótipo cobre o cadastro, o perfil financeiro, lançamentos, importação, comprovantes e alertas inteligentes.</p>
   </aside>;
 }
 export default function RegistrationApp() {
   const [step, setStep] = useState(0);
   const [view, setView] = useState<'register' | 'login' | 'dashboard' | 'deactivated'>('login');
+  const [dashTab, setDashTab] = useState<'overview' | 'transactions' | 'planning' | 'guides'>('overview');
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [values, setValues] = useState<Values>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
@@ -126,8 +125,13 @@ export default function RegistrationApp() {
   const heading = useRef<HTMLHeadingElement>(null);
   const postalValue = useRef('');
 
-  function resume(a: Account) {
+  function resume(a: Account, nextDashboard?: DashboardData, nextProfile?: ProfileData) {
     setAccount(a);
+    if (nextDashboard) {
+      setDashboard(nextDashboard);
+      if (nextDashboard.lessons?.length) setLessons(nextDashboard.lessons);
+    }
+    if (nextProfile) setProfile(nextProfile);
     setValues(v => ({ ...v, name: a.name, email: a.email, password: '', confirmPassword: '' }));
     if (a.finance) { setIncome(String(a.finance.income)); setExpenses(String(a.finance.fixedExpenses)); setGoal(a.finance.goal); }
     else { setIncome(''); setExpenses(''); setGoal(''); }
@@ -141,7 +145,21 @@ export default function RegistrationApp() {
       api<{ account: Account }>('session').then(({ account }) => resume(account)),
     ]).finally(() => setLoadingSession(false));
   }, []);
-  useEffect(() => { if (view === 'dashboard') api<{ lessons: Lesson[] }>('lessons').then(v => setLessons(v.lessons)).catch(() => setNotice('Os materiais estão indisponíveis neste momento.')); }, [view]);
+  useEffect(() => {
+    if (view !== 'dashboard') return;
+    api<{ account: Account; profile: ProfileData; dashboard: DashboardData }>('dashboard')
+      .then((res) => {
+        setAccount(res.account);
+        setProfile(res.profile);
+        setDashboard(res.dashboard);
+        if (res.dashboard.lessons?.length) setLessons(res.dashboard.lessons);
+      })
+      .catch(() => {
+        api<{ lessons: Lesson[] }>('lessons')
+          .then(v => setLessons(v.lessons))
+          .catch(() => setNotice('Os materiais estão indisponíveis neste momento.'));
+      });
+  }, [view]);
   useEffect(() => { if (step !== 2) return; const id = setInterval(() => setTime(Date.now() / 1000), 1000); return () => clearInterval(id); }, [step]);
   useEffect(() => {
     if (!values.state) { setCities([]); return; }
@@ -203,7 +221,7 @@ export default function RegistrationApp() {
       const parsed = financeSchema.safeParse(data);
       if (!parsed.success) return invalid({ ...fieldErrors(parsed.error), ...(income === '' ? { income: 'Informe sua renda estimada, mesmo que seja zero.' } : {}), ...(expenses === '' ? { fixedExpenses: 'Informe seus gastos fixos estimados.' } : {}) });
       setBusy(true);
-      try { const result = await api<{ account: Account }>('finance', data); resume(result.account); }
+      try { const result = await api<{ account: Account; dashboard?: DashboardData }>('finance', data); resume(result.account, result.dashboard); }
       catch (e) { showError(e); } finally { setBusy(false); }
     }
   }
@@ -214,7 +232,7 @@ export default function RegistrationApp() {
   }
   async function logout() {
     setBusy(true); setError('');
-    try { await api('logout', {}); setAccount(null); setView('login'); setValues(initial); setLessons([]); setInbox(null); }
+    try { await api('logout', {}); setAccount(null); setDashboard(null); setProfile(null); setView('login'); setValues(initial); setLessons([]); setInbox(null); }
     catch (e) { showError(e); } finally { setBusy(false); }
   }
   async function openInbox() {
@@ -225,6 +243,17 @@ export default function RegistrationApp() {
     setBusy(true); setError('');
     try { const data = await api<{ resendAt: number }>('resend', {}); setResendAt(data.resendAt); setCode(''); setInbox(null); setNotice('Um novo código está na sua caixa de demonstração.'); }
     catch (e) { showError(e); } finally { setBusy(false); }
+  }
+  async function markLessonRead(item: Lesson) {
+    try {
+      const res = await api<{ dashboard: DashboardData }>('lessons/progress', { lessonId: item.id, progressPercent: 100 });
+      setDashboard(res.dashboard);
+      if (res.dashboard.lessons?.length) setLessons(res.dashboard.lessons);
+      setLesson(prev => prev && prev.id === item.id ? { ...prev, progressPercent: 100 } : prev);
+      setNotice(`Guia "${item.title}" marcado como concluído.`);
+    } catch (e) {
+      showError(e);
+    }
   }
   const passwordRules = [values.password.length >= 8 && values.password.length <= 32, /[A-Z]/.test(values.password), /\d/.test(values.password)];
   const input = (key: keyof Values, options: Record<string, unknown> = {}) => ({ id: key, name: key, value: String(values[key]), onChange: (e: React.ChangeEvent<HTMLInputElement>) => update(key, e.target.value), 'aria-invalid': !!errors[key], 'aria-describedby': `${key}-help`, ...options });
@@ -239,21 +268,52 @@ export default function RegistrationApp() {
   ];
   const goalIcons = [Wallet, CreditCard, PiggyBank, TrendingUp];
   const switchView = (next: 'login' | 'register') => { setView(next); setStep(0); setError(''); setNotice(''); };
-  const incomeValue = account?.finance?.income ?? 0;
-  const fixedValue = account?.finance?.fixedExpenses ?? 0;
-  const leftValue = incomeValue - fixedValue;
-  const share = incomeValue > 0 ? Math.min(100, Math.round(fixedValue / incomeValue * 100)) : fixedValue > 0 ? 100 : 0;
-  const money = { style: 'currency', currency: 'BRL' } as const;
-  const userGoal = goals.findIndex(g => g.id === account?.finance?.goal);
-  const GoalIcon = goalIcons[userGoal] ?? Target;
   const errorAlert = error && <div className="alert alert-error" role="alert"><CircleAlert size={18} /><span>{error}</span><button type="button" aria-label="Fechar aviso" onClick={() => setError('')}><X size={16} /></button></div>;
   const noticeAlert = notice && <div className="alert alert-success" role="status"><CheckCircle2 size={18} /><span>{notice}</span></div>;
+  const initials = account?.name
+    ? account.name.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('')
+    : 'VA';
 
   return <MotionConfig reducedMotion="user"><div className="app-shell">
-    <header className="site-header"><a className="brand" href="/" aria-label="ValorAI — início"><img src={productLogo} alt="ValorAI" width="118" height="38" /></a><span className="tag">Protótipo</span>
-      <div className="header-actions"><button className="button button-ghost button-small header-about" onClick={() => setModal('about')}>Sobre o protótipo</button>
+    <header className="site-header">
+      <a className="brand" href="/" aria-label="ValorAI — início"><img src={productLogo} alt="ValorAI" width="118" height="38" /></a>
+      <span className="tag">Protótipo</span>
+      {view === 'dashboard' && account && (
+        <nav className="header-nav" aria-label="Navegação do painel">
+          {([
+            ['overview', 'Visão Geral'],
+            ['transactions', 'Transações & Extratos'],
+            ['planning', 'Planejamento'],
+            ['guides', 'Guias'],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`header-nav-link ${dashTab === id ? 'active' : ''}`}
+              aria-current={dashTab === id ? 'page' : undefined}
+              onClick={() => setDashTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+      <div className="header-actions">
+        <button className="button button-ghost button-small header-about" onClick={() => setModal('about')}>Sobre o protótipo</button>
+        {view === 'dashboard' && account && (
+          <div className="user-pill" title={`${account.name} (${account.city} · ${account.state})`}>
+            <span className="user-avatar" aria-hidden="true">
+              {profile?.avatar || account.avatar ? <img src={(profile?.avatar || account.avatar) ?? ''} alt="" /> : initials}
+            </span>
+            <span className="user-pill-text">
+              <strong>{account.name.split(' ')[0]}</strong>
+              <small>{account.city || 'Cliente'}</small>
+            </span>
+          </div>
+        )}
         {account ? <button className="button button-secondary button-small" onClick={logout} disabled={busy || loadingSession}>Sair<LogOut size={16} /></button>
-          : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}</div>
+          : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}
+      </div>
     </header>
     <main id="main" className={view === 'dashboard' ? 'dashboard' : view === 'deactivated' ? 'state-page' : 'auth'}>
       <AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
@@ -316,45 +376,31 @@ export default function RegistrationApp() {
           <p className="form-switch">Primeira vez aqui? <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('register')}>Criar minha conta</button></p>
           <div className="note"><Info size={16} /><span>A recuperação de senha ainda não faz parte deste protótipo.</span></div>
         </>}
-        {view === 'dashboard' && account && <>
-          <div className="dash-intro"><div><h1 ref={heading} tabIndex={-1}>Olá, {account.name.split(' ')[0]}.</h1><p>Cadastro concluído. Este é seu ponto de partida, com base no que você informou.</p></div></div>
-          {errorAlert}{noticeAlert}
-          <div className="dash-grid"><div className="dash-col">
-            <section className="card" aria-labelledby="profile-title">
-              <div className="card-head"><div><h2 id="profile-title">Perfil financeiro</h2><p>Estimativas mensais informadas por você</p></div><button className="button button-secondary button-small" onClick={() => { setStep(3); setView('register'); }}>Ajustar perfil</button></div>
-              <div className="figures">
-                <div className="figure"><span>Renda</span><strong><span className="sr-only">{currency(incomeValue)}</span><NumberFlow aria-hidden="true" value={incomeValue} locales="pt-BR" format={money} /></strong></div><span className="operator" aria-hidden="true">−</span>
-                <div className="figure"><span>Gastos fixos</span><strong><span className="sr-only">{currency(fixedValue)}</span><NumberFlow aria-hidden="true" value={fixedValue} locales="pt-BR" format={money} /></strong></div><span className="operator" aria-hidden="true">=</span>
-                <div className={`figure result ${leftValue < 0 ? 'negative' : ''}`}><span>Sobra estimada</span><strong><span className="sr-only">{currency(leftValue)}</span><NumberFlow aria-hidden="true" value={leftValue} locales="pt-BR" format={money} /></strong></div>
-              </div>
-              <div className="split"><div className={`split-bar ${leftValue < 0 ? 'over' : ''}`} aria-hidden="true"><span style={{ width: `${share}%` }} /></div>
-                <div className="split-legend" aria-hidden="true"><span><i />Gastos fixos · {share}%</span><span><i />Sobra · {100 - share}%</span></div>
-                <p className="split-summary">{incomeValue === 0 ? 'Informe uma renda para ver quanto dela vai para gastos fixos.' : leftValue < 0 ? `Os gastos fixos superam a renda informada em ${currency(-leftValue)}.` : `Seus gastos fixos usam ${share}% da renda informada.`}</p></div>
-              <div className="goal-line"><GoalIcon size={22} aria-hidden="true" /><div><small>Seu objetivo</small><strong>{goals[userGoal]?.title ?? 'Não definido'}</strong></div></div>
-              <p className="fine-print">Não é saldo bancário: gastos variáveis ainda não entram nesta conta.</p>
-            </section>
-            <section className="card" aria-labelledby="guides-title">
-              <div className="card-head"><div><h2 id="guides-title">Guias para começar</h2><p>Leituras curtas sobre organização financeira</p></div></div>
-              {lessons.length ? <ul className="guide-list">{lessons.map(item => <li key={item.id}><button onClick={() => setLesson(item)}><span className="guide-icon"><BookOpen size={19} /></span><strong>{item.title}</strong><small>{item.description}</small><span className="guide-time"><Clock3 size={14} />{item.minutes} min</span></button></li>)}</ul>
-                : <p className="fine-print">Carregando guias…</p>}
-            </section>
-          </div><div className="dash-col">
-            <section className="card" aria-labelledby="next-title">
-              <div className="card-head"><div><h2 id="next-title">Próximas etapas</h2><p>Ainda não disponíveis neste protótipo</p></div></div>
-              <ul className="roadmap">
-                <li><PenLine size={18} /><span><strong>Lançamentos</strong>Receitas, despesas e contas a pagar ou receber, cada uma com categoria.</span></li>
-                <li><FileUp size={18} /><span><strong>Importação</strong>Arquivos CSV, Excel e OFX.</span></li>
-                <li><Camera size={18} /><span><strong>Comprovantes por foto</strong>Extração dos dados com IA.</span></li>
-                <li><Tags size={18} /><span><strong>Limites e alertas</strong>Avisos ao atingir os limites que você definir.</span></li>
-              </ul>
-            </section>
-            <section className="card" aria-labelledby="account-title">
-              <div className="card-head"><div><h2 id="account-title">Sua conta</h2></div></div>
-              <dl className="account-list"><div><dt>E-mail</dt><dd>{account.email}</dd></div><div><dt>Cidade</dt><dd>{account.city} · {account.state}</dd></div><div><dt>Confirmação</dt><dd>Demonstração</dd></div></dl>
-              <div className="danger-zone"><button className="link-button" onClick={() => { setDeactivateError(''); setModal('deactivate'); }}>Desativar minha conta</button></div>
-            </section>
-          </div></div>
-        </>}
+        {view === 'dashboard' && account && (
+          <DashboardWorkspace
+            account={account}
+            dashboard={dashboard}
+            profile={profile}
+            lessons={lessons}
+            activeTab={dashTab}
+            onSelectTab={setDashTab}
+            onEditFinanceProfile={() => { setStep(3); setView('register'); }}
+            onOpenDeactivate={() => { setDeactivateError(''); setModal('deactivate'); }}
+            onOpenLesson={(item) => setLesson(item)}
+            onRefreshDashboard={(nextDashboard, nextAccount, nextProfile) => {
+              setDashboard(nextDashboard);
+              if (nextDashboard.lessons?.length) setLessons(nextDashboard.lessons);
+              if (nextAccount) setAccount(nextAccount);
+              if (nextProfile) setProfile(nextProfile);
+            }}
+            apiCall={api}
+            headingRef={heading}
+            errorAlert={errorAlert}
+            noticeAlert={noticeAlert}
+            setNotice={setNotice}
+            setError={setError}
+          />
+        )}
         {view === 'deactivated' && <><div className="page-heading"><h1 ref={heading} tabIndex={-1}>Conta desativada</h1><p>Suas sessões foram encerradas. O cadastro e o perfil financeiro foram preservados (exclusão lógica).</p><p>Reativação e exclusão definitiva ainda não estão disponíveis.</p></div>
           <button className="button button-primary button-block" onClick={() => { setView('login'); setStep(0); setValues(initial); }}>Voltar ao início<ArrowRight size={18} /></button></>}
       </motion.div></AnimatePresence>
@@ -363,16 +409,23 @@ export default function RegistrationApp() {
     </main>
     <footer className="site-footer"><div><span>Uma iniciativa</span><img src={companyLogo} alt="Nulfinance Inc." width="84" height="28" /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
     {modal === 'about' && <Modal title="Sobre este protótipo" onClose={() => setModal(null)}><div className="modal-body">
-      <p>Este ambiente demonstra o cadastro (RF001), a confirmação simulada (RF002) e o perfil financeiro (RF004), com login, sessão e desativação para testar o ciclo da conta.</p>
+      <p>Este ambiente demonstra o cadastro (RF001), a confirmação simulada (RF002), a manutenção do perfil cadastral (RF003), o perfil financeiro (RF004), os 3 canais de lançamentos, importação, leitura de comprovantes por IA, limites e metas.</p>
       <div className="note"><Info size={16} /><span>Use dados fictícios e uma senha exclusiva para teste. Os dados ficam na Cloudflare. Não há envio de e-mail nem verificação real de titularidade.</span></div>
       <p>A confirmação usa, provisoriamente, 10 minutos de validade, cinco tentativas e até três envios por hora, com intervalo de 60 segundos. Esses parâmetros ainda dependem de validação nos requisitos.</p>
-      <p>Os guias são pré-carregados. Lançamentos, importação, comprovantes por IA, limites e alertas ainda estão em desenvolvimento. O protótipo não declara conformidade com a LGPD.</p>
+      <p>Os alertas de limites avisam você ao atingir ou superar o teto configurado sem bloquear nenhum lançamento. O protótipo não declara conformidade com a LGPD.</p>
       <button className="button button-primary button-block" onClick={() => setModal(null)}>Entendi</button></div></Modal>}
     {modal === 'inbox' && <Modal title="Caixa de demonstração" onClose={() => setModal(null)}><div className="modal-body">{inboxError ? <p role="alert">{inboxError}</p> : inbox ? <>
       <dl className="mail-meta"><dt>De</dt><dd>ValorAI (simulado)</dd><dt>Para</dt><dd>{inbox.to}</dd><dt>Assunto</dt><dd>Seu código de confirmação</dd></dl>
       <p>Use este código para confirmar seu cadastro:</p><div className="inbox-code">{inbox.code}</div><p className="field-hint">Uso único. Nenhum e-mail foi enviado.</p>
       <button className="button button-primary button-block" onClick={() => { setCode(inbox.code); setModal(null); }}>Usar este código<ArrowRight size={18} /></button></> : <p role="status">Abrindo mensagem…</p>}</div></Modal>}
-    {modal === 'deactivate' && <Modal title="Desativar sua conta?" onClose={() => { setModal(null); setDeactivatePassword(''); }}><form className="modal-body" onSubmit={async e => { e.preventDefault(); setBusy(true); setDeactivateError(''); try { await api('deactivate', { password: deactivatePassword }); setModal(null); setAccount(null); setView('deactivated'); setDeactivatePassword(''); } catch (e) { setDeactivateError(e instanceof Error ? e.message : 'Tente novamente.'); } finally { setBusy(false); } }}><p>O acesso será encerrado em todos os dispositivos. Seu cadastro e suas estimativas serão preservados; nada é apagado.</p><Field id="deactivatePassword" label="Confirme sua senha" error={deactivateError}><input id="deactivatePassword" type="password" autoComplete="current-password" value={deactivatePassword} onChange={e => setDeactivatePassword(e.target.value)} required maxLength={32} /></Field><button className="button button-danger button-block" disabled={busy}>{busy ? 'Desativando…' : 'Confirmar desativação'}</button></form></Modal>}
-    {lesson && <Modal title={lesson.title} onClose={() => setLesson(null)}><div className="modal-body lesson-body"><span className="tag"><Clock3 size={13} />{lesson.minutes} min de leitura</span><p>{lesson.body}</p><button className="button button-primary button-block" onClick={() => setLesson(null)}>Fechar guia</button></div></Modal>}
+    {modal === 'deactivate' && <Modal title="Desativar sua conta?" onClose={() => { setModal(null); setDeactivatePassword(''); }}><form className="modal-body" onSubmit={async e => { e.preventDefault(); setBusy(true); setDeactivateError(''); try { await api('deactivate', { password: deactivatePassword }); setModal(null); setAccount(null); setDashboard(null); setProfile(null); setView('deactivated'); setDeactivatePassword(''); } catch (e) { setDeactivateError(e instanceof Error ? e.message : 'Tente novamente.'); } finally { setBusy(false); } }}><p>O acesso será encerrado em todos os dispositivos. Seu cadastro e suas estimativas serão preservados; nada é apagado.</p><Field id="deactivatePassword" label="Confirme sua senha" error={deactivateError}><input id="deactivatePassword" type="password" autoComplete="current-password" value={deactivatePassword} onChange={e => setDeactivatePassword(e.target.value)} required maxLength={32} /></Field><button className="button button-danger button-block" disabled={busy}>{busy ? 'Desativando…' : 'Confirmar desativação'}</button></form></Modal>}
+    {lesson && <Modal title={lesson.title} onClose={() => setLesson(null)}><div className="modal-body lesson-body">
+      <div className="lesson-modal-meta"><span className="tag"><Clock3 size={13} />{lesson.minutes} min de leitura</span>{lesson.progressPercent === 100 && <span className="pill-badge pill-success"><Check size={12} />Leitura concluída</span>}</div>
+      <p>{lesson.body}</p>
+      <div className="modal-actions-row">
+        {lesson.progressPercent !== 100 && <button type="button" className="button button-secondary" onClick={() => markLessonRead(lesson)}><Check size={16} />Marcar como concluído</button>}
+        <button type="button" className="button button-primary" onClick={() => setLesson(null)}>Fechar guia</button>
+      </div>
+    </div></Modal>}
   </div></MotionConfig>;
 }

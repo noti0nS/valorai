@@ -8,12 +8,12 @@
   },
   "scripts": {
     "dev": "astro dev --host 127.0.0.1",
-    "dev:api": "uv run --project server/python pywrangler dev --ip 127.0.0.1 --port 8787",
+    "dev:api": "uv run --directory server/python pywrangler dev --ip 127.0.0.1 --port 8787",
     "build": "astro build",
     "check": "astro check",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
-    "deploy": "npm run build && uv run --project server/python pywrangler deploy --env production"
+    "deploy": "npm run build && uv run --directory server/python pywrangler deploy --env production"
   },
   "dependencies": {
     "@astrojs/react": "^7.1.2",

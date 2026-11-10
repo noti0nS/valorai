@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validCpf, oldEnough, passwordSchema, registrationSchema, financeSchema } from '../shared/validation';
+import { validCpf, oldEnough, passwordSchema, registrationSchema, financeSchema, suggestCategory, transactionSchema, profileUpdateSchema } from '../shared/validation';
 
 test('CPF verifies both check digits and rejects repeated digits', () => {
   assert.equal(validCpf('529.982.247-25'), true);
@@ -30,4 +30,33 @@ test('registration requires matching passwords and explicit demonstration consen
 test('financial estimates permit zero and deficits but reject invalid amounts', () => {
   assert.equal(financeSchema.safeParse({ income: 0, fixedExpenses: 50, goal: 'budget' }).success, true);
   for (const income of [-1, NaN, Infinity]) assert.equal(financeSchema.safeParse({ income, fixedExpenses: 0, goal: 'budget' }).success, false);
+});
+test('auto-classification suggests standard categories and transaction schema requires category', () => {
+  assert.deepEqual(suggestCategory('Pão de Açúcar Supermercado'), { category: 'Alimentação & Mercado', kind: 'variable_expense' });
+  assert.deepEqual(suggestCategory('Aluguel apartamento'), { category: 'Moradia (Fixo)', kind: 'fixed_expense' });
+  assert.deepEqual(suggestCategory('Salário mensal', 'income'), { category: 'Renda / Serviços', kind: 'income' });
+  assert.equal(transactionSchema.safeParse({
+    title: 'Supermercado',
+    amount: 186.4,
+    kind: 'variable_expense',
+    category: 'Alimentação & Mercado',
+    occurredOn: '2026-10-29',
+  }).success, true);
+  assert.equal(transactionSchema.safeParse({
+    title: 'Sem categoria',
+    amount: 50,
+    kind: 'variable_expense',
+    category: '',
+    occurredOn: '2026-10-29',
+  }).success, false);
+});
+test('profile update schema validates editable fields for RF003', () => {
+  assert.equal(profileUpdateSchema.safeParse({
+    name: 'Mariana Costa',
+    birthDate: '1995-06-15',
+    phone: '(82) 99999-0000',
+    postalCode: '57020-000',
+    state: 'AL',
+    city: 'Maceió',
+  }).success, true);
 });

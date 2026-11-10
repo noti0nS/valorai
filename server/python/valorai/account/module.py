@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from valorai.account.validation import profile_update_from
 from valorai.crypto import sha256_hex
 from valorai.errors import ApiError
 from valorai.kv import PrefixKv
@@ -20,8 +21,26 @@ class Attempt:
         return cls(int(value["count"]), int(value["window"]), int(value["blockedUntil"]))
 
 
+def mask_cpf(cpf: str) -> str:
+    if len(cpf) != 11:
+        return cpf
+    return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+
+
+def mask_phone(phone: str) -> str:
+    if len(phone) == 11:
+        return f"({phone[:2]}) {phone[2:7]}-{phone[7:]}"
+    return phone
+
+
+def mask_postal(postal: str) -> str:
+    if len(postal) == 8:
+        return f"{postal[:5]}-{postal[5:]}"
+    return postal
+
+
 class AccountModule:
-    """Identity, password check, status, and deactivation. Hashing stays on the injected hasher."""
+    """Identity, password check, status, profile maintenance, and deactivation. Hashing stays on the injected hasher."""
 
     def __init__(self, accounts, kv, hasher, clock, audit):
         self.accounts = accounts
@@ -78,6 +97,45 @@ class AccountModule:
             raise ApiError(409, "Essa etapa já foi concluída.")
         self.audit.record(account.id, "demo_confirmation_completed", ip_hash, self.clock.now())
         return updated
+
+    def update_profile(self, account: Account, payload: dict, ip_hash: str) -> Account:
+        if not isinstance(payload, dict):
+            raise ApiError(400, "Não foi possível ler o formulário.")
+        update = profile_update_from(payload, self.clock.today(), account.cpf)
+        changed: list[str] = []
+        if update.name != account.name:
+            changed.append("nome")
+        if update.birth_date != account.birth_date:
+            changed.append("data de nascimento")
+        if update.phone != account.phone:
+            changed.append("celular")
+        if update.postal_code != account.postal_code:
+            changed.append("CEP")
+        if update.state != account.state:
+            changed.append("UF")
+        if update.city != account.city:
+            changed.append("cidade")
+        if not update.keep_avatar and update.avatar_data != account.avatar_data:
+            changed.append("avatar")
+        now = self.clock.now()
+        updated = self.accounts.update_profile(account.id, update, changed, now)
+        if changed:
+            self.audit.record(account.id, "profile_updated", ip_hash, now)
+        return updated
+
+    def present_profile(self, account: Account) -> dict:
+        return {
+            "name": account.name,
+            "cpf": mask_cpf(account.cpf),
+            "email": account.email,
+            "birthDate": account.birth_date,
+            "phone": mask_phone(account.phone),
+            "postalCode": mask_postal(account.postal_code),
+            "state": account.state,
+            "city": account.city,
+            "avatar": account.avatar_data,
+            "history": self.accounts.list_profile_changes(account.id),
+        }
 
     def deactivate(self, account: Account, password: object, sessions, confirmation, ip_hash: str) -> None:
         """Status, then sessions, then the confirmation code, then the audit event.

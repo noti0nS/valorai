@@ -30,9 +30,10 @@ from valorai.confirmation.module import ConfirmationModule
 from valorai.coordinator.hasher import BcryptHasher
 from valorai.finance.module import FinanceModule
 from valorai.http import RegistrationApi, admit
+from valorai.ledger.module import LedgerModule
 from valorai.runtime import api_context
 from valorai.session.module import SessionModule
-from valorai.storage import DjangoDb, SqlAccounts, SqlAudit, SqlLessons, SqlSessions
+from valorai.storage import DjangoDb, SqlAccounts, SqlAudit, SqlLedger, SqlLessons, SqlSessions
 from valorai.throttle import Throttle
 from valorai.turnstile import Turnstile
 
@@ -51,18 +52,22 @@ def build_api(storage, env) -> RegistrationApi:
     clock = SystemClock()
     kv = DurableKv(storage)
     bot = Turnstile(env.ENVIRONMENT, getattr(env, "TURNSTILE_SECRET_KEY", None), turnstile_verify)
+    accounts = SqlAccounts(db)
+    audit = SqlAudit(db)
+    lessons = SqlLessons(db)
     return RegistrationApi(
-        AccountModule(SqlAccounts(db), kv, HASHER, clock, SqlAudit(db)),
-        SessionModule(SqlSessions(db), SqlAccounts(db), clock, _tokens),
+        AccountModule(accounts, kv, HASHER, clock, audit),
+        SessionModule(SqlSessions(db), accounts, clock, _tokens),
         ConfirmationModule(kv, clock, _code_number),
-        FinanceModule(SqlAccounts(db), clock, SqlAudit(db)),
+        FinanceModule(accounts, clock, audit),
         Throttle(kv, clock),
-        SqlLessons(db),
+        lessons,
         bot,
         clock,
         getattr(env, "TURNSTILE_SITE_KEY", "") or "",
         getattr(env, "EMAIL_MODE", "demo"),
         log=lambda: print("authentication_request_failed"),
+        ledger=LedgerModule(SqlLedger(db), accounts, lessons, clock, audit),
     )
 
 

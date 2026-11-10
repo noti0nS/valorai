@@ -1,13 +1,16 @@
+import base64
 import re
 from datetime import datetime
 
 from valorai.errors import ApiError
-from valorai.records import Registration
+from valorai.records import ProfileUpdate, Registration
 
 STATES = {
     "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
     "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 }
+MAX_AVATAR_BYTES = 2 * 1024 * 1024
+AVATAR_PREFIX = re.compile(r"^data:image/(?:jpeg|jpg|png);base64,([A-Za-z0-9+/=\s]+)$")
 
 
 def digits(value: str) -> str:
@@ -98,4 +101,71 @@ def registration_from(body: dict, today: datetime) -> Registration:
     return Registration(
         name.strip(), digits(cpf), birth, phone_digits, postal_digits, state, city.strip(),
         email.strip().lower(), body["password"],
+    )
+
+
+def profile_update_from(body: dict, today: datetime, current_cpf: str) -> ProfileUpdate:
+    errors: dict[str, str] = {}
+    if "cpf" in body and body.get("cpf") is not None:
+        raw_cpf = body.get("cpf")
+        if not isinstance(raw_cpf, str) or digits(raw_cpf) != current_cpf:
+            errors["cpf"] = "O CPF permanece inalterável."
+    name = body.get("name")
+    if not isinstance(name, str) or not (3 <= len(name.strip()) <= 120):
+        errors["name"] = "Informe seu nome completo."
+    if not old_enough(body.get("birthDate"), today):
+        errors["birthDate"] = "É necessário ter pelo menos 16 anos."
+    phone = body.get("phone")
+    phone_digits = digits(phone) if isinstance(phone, str) else ""
+    if not re.fullmatch(r"[1-9]{2}9\d{8}", phone_digits):
+        errors["phone"] = "Informe DDD e celular com 9 dígitos."
+    postal = body.get("postalCode")
+    postal_digits = digits(postal) if isinstance(postal, str) else ""
+    if len(postal_digits) != 8:
+        errors["postalCode"] = "Informe os 8 dígitos do CEP."
+    state = body.get("state")
+    if state not in STATES:
+        errors["state"] = "Selecione seu estado."
+    city = body.get("city")
+    if not isinstance(city, str) or not (2 <= len(city.strip()) <= 100):
+        errors["city"] = "Informe sua cidade."
+
+    keep_avatar = True
+    avatar_data: str | None = None
+    if "avatar" in body:
+        raw_avatar = body.get("avatar")
+        if raw_avatar is None or raw_avatar == "":
+            keep_avatar = False
+            avatar_data = None
+        elif isinstance(raw_avatar, str):
+            match = AVATAR_PREFIX.match(raw_avatar.strip())
+            if not match:
+                errors["avatar"] = "Envie uma imagem em JPG ou PNG."
+            else:
+                try:
+                    decoded = base64.b64decode(match.group(1), validate=True)
+                    if len(decoded) > MAX_AVATAR_BYTES:
+                        errors["avatar"] = "O avatar deve ter no máximo 2 MB."
+                    else:
+                        keep_avatar = False
+                        avatar_data = raw_avatar.strip()
+                except Exception:
+                    errors["avatar"] = "Não foi possível ler a imagem do avatar."
+        else:
+            errors["avatar"] = "Envie uma imagem em JPG ou PNG."
+
+    if errors:
+        raise ApiError(422, "Confira os campos destacados.", errors)
+    assert isinstance(name, str) and isinstance(state, str) and isinstance(city, str)
+    birth = body.get("birthDate")
+    assert isinstance(birth, str)
+    return ProfileUpdate(
+        name=name.strip(),
+        birth_date=birth,
+        phone=phone_digits,
+        postal_code=postal_digits,
+        state=state,
+        city=city.strip(),
+        avatar_data=avatar_data,
+        keep_avatar=keep_avatar,
     )
