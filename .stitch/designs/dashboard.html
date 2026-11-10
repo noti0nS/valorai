@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{colors:{"on-tertiary-fixed":"#181c23","surface-card":"#ffffff","on-background":"#1a1c1a","tertiary-fixed-dim":"#c3c6d1","tertiary":"#454952","secondary":"#466554","tertiary-fixed":"#dfe2ed","secondary-fixed-dim":"#acceba","secondary-fixed":"#c8ebd5","forest":"#3c6a53","on-primary":"#ffffff","terracotta-edge":"#f0d3cc","primary":"#23523c","on-secondary-fixed-variant":"#2e4d3d","on-surface":"#1a1c1a","surface-container-low":"#f4f4f0","background":"#faf9f5","surface-dim":"#dadad6","on-secondary-fixed":"#012114","surface-container-highest":"#e2e3df","graphite-soft":"#4b515c","error-container":"#ffdad6","outline":"#717973","on-primary-fixed-variant":"#214f3a","on-tertiary-fixed-variant":"#43474f","on-error":"#ffffff","tertiary-container":"#5d616a","on-secondary":"#ffffff","terracotta-pressed":"#8a3124","on-tertiary-container":"#d9dce7","forest-ink":"#335c47","primary-fixed":"#bceed1","on-secondary-container":"#4c6b5a","primary-container":"#3c6a53","surface-container-lowest":"#ffffff","surface-container":"#ecede7","surface-tint":"#396751","inverse-surface":"#2f312e","graphite":"#242830","preview-dark-surface":"#242830","inverse-primary":"#a0d1b5","sage":"#7e9f8c","on-tertiary":"#ffffff","surface-subtle":"#fafaf7","limit-gold-accent":"#e2b35c","graphite-mist":"#676d78","on-primary-container":"#b6e8cb","surface-variant":"#e2e3df","error":"#ba1a1a","forest-pressed":"#2f5742","terracotta-wash":"#fbefec","surface-bright":"#faf9f5","limit-gold-fill":"#3a3426","inverse-on-surface":"#f1f1ed","sage-mist":"#edf3ef","sage-line":"#cbdcd1","primary-fixed-dim":"#a0d1b5","stone-edge":"#c9ccc4","on-error-container":"#93000a","on-surface-variant":"#414943","on-primary-fixed":"#002113","stone-line":"#e2e3dd","outline-variant":"#c0c9c1","preview-dark-container":"#2e333c","secondary-container":"#c8ebd5","surface-container-high":"#e8e8e4","terracotta":"#a23b2c","surface":"#f5f5f1"},borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"},spacing:{"space-xs":"0.25rem","gutter-desktop":"1.25rem",gutter:"1rem","space-sm":"0.5rem",margin:"1rem","space-md":"1rem","margin-tablet":"1.5rem","margin-desktop":"2rem","space-lg":"1.5rem","space-xl":"2rem"},fontFamily:{"stat-lg-mobile":["Instrument Sans"],"headline-md":["Instrument Sans"],caption:["Instrument Sans"],"display-lg":["Instrument Sans"],"display-lg-mobile":["Instrument Sans"],"field-label":["Instrument Sans"],"body-base":["Instrument Sans"],"body-sm":["Instrument Sans"],"code-otp":["\"ui-monospace, Cascadia Mono, Consolas, monospace\""],"label-caps":["Instrument Sans"],"stat-lg":["Instrument Sans"],"headline-sm":["Instrument Sans"],"body-bold":["Instrument Sans"]},fontSize:{"stat-lg-mobile":["22px",{lineHeight:"28px",letterSpacing:"-0.02em",fontWeight:"600"}],"headline-md":["19px",{lineHeight:"24px",letterSpacing:"-0.02em",fontWeight:"600"}],caption:["13px",{lineHeight:"18px",letterSpacing:"0",fontWeight:"400"}],"display-lg":["36px",{lineHeight:"44px",letterSpacing:"-0.02em",fontWeight:"600"}],"display-lg-mobile":["28px",{lineHeight:"34px",letterSpacing:"-0.02em",fontWeight:"600"}],"field-label":["14px",{lineHeight:"18px",letterSpacing:"0",fontWeight:"600"}],"body-base":["16px",{lineHeight:"24px",letterSpacing:"0",fontWeight:"400"}],"body-sm":["15px",{lineHeight:"22px",letterSpacing:"0",fontWeight:"400"}],"code-otp":["28px",{lineHeight:"32px",letterSpacing:"0.35em",fontWeight:"400"}],"label-caps":["12px",{lineHeight:"16px",letterSpacing:"0.04em",fontWeight:"600"}],"stat-lg":["30px",{lineHeight:"36px",letterSpacing:"-0.02em",fontWeight:"600"}],"headline-sm":["17px",{lineHeight:"22px",letterSpacing:"0",fontWeight:"600"}],"body-bold":["16px",{lineHeight:"24px",letterSpacing:"0",fontWeight:"600"}]}}}};</script></head><body class="bg-surface font-body-base text-body-base text-on-surface antialiased"><header class="fixed top-0 left-0 right-0 z-50 bg-surface/95 backdrop-blur-md border-b border-stone-line"><div class="h-[72px] max-w-7xl mx-auto px-6 flex items-center justify-between gap-4"><div class="flex items-center gap-3 shrink-0"><img alt="ValorAI Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/ALJJyrDsFIg_LwbYPHPuwHEo8cBNbCnjwsSuiCO5wIQabCULx5FL1qkXV-emJ3AVuFXa5-3X8Ceu1f6lfpVpq5m9Lvs0LQph9xD8sO8mTZIAzpACqrQnmiHfpzVqvXZgVqWnA4FMVGqVy24lK7ZN07H5nBey8JMCz1Bj5iwRUAFpmFn4SzSytqjNzpDGia_5-j4FppvBLOtBVKB97gXmh_jTDp9O_H21q-5_UTiXu4HRFQ"/><span class="font-headline-sm text-headline-sm text-graphite tracking-tight">ValorAI</span><span class="px-2 py-0.5 rounded bg-surface-card border border-stone-edge text-graphite-soft font-label-caps text-label-caps">Protótipo</span></div><nav class="hidden lg:flex items-center gap-6 h-full" data-active-classes="text-forest border-b-2 border-forest font-body-bold"><a class="h-full inline-flex items-center text-on-surface-variant hover:text-on-surface transition-colors font-body-sm text-body-sm" data-path="visao-geral" href="#">Visão Geral</a><a class="h-full inline-flex items-center text-on-surface-variant hover:text-on-surface transition-colors font-body-sm text-body-sm" data-path="transacoes-extratos" href="#">Transações &amp; Extratos</a><a class="h-full inline-flex items-center text-on-surface-variant hover:text-on-surface transition-colors font-body-sm text-body-sm" data-path="canais-leitura-ia" href="#">Canais &amp; Leitura IA</a><a class="h-full inline-flex items-center text-on-surface-variant hover:text-on-surface transition-colors font-body-sm text-body-sm" data-path="guias-educativos" href="#">Guias Educativos</a></nav><div class="flex items-center gap-4 shrink-0"><div class="hidden sm:flex flex-col text-right leading-tight"><span class="font-body-bold text-body-sm text-graphite">José Lucas</span><span class="font-caption text-caption text-forest-ink flex items-center justify-end gap-1"><span class="w-1.5 h-1.5 rounded-full bg-forest inline-block"></span>Equilíbrio Ativo</span></div><button class="h-9 px-3 rounded-lg bg-surface-card border border-stone-edge text-graphite hover:border-graphite-mist hover:text-graphite font-body-bold text-caption transition-colors" type="button">Ajustar Perfil</button><button class="h-9 px-2.5 rounded-lg text-graphite-soft hover:bg-surface-container-high hover:text-on-surface font-body-bold text-caption transition-colors" type="button">Sair</button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="w-full pt-[72px] bg-surface"><div class="max-w-7xl mx-auto px-6 py-8"><div class="flex flex-col w-full">
+<!-- Subtle decorative ambient highlight -->
+<div class="relative w-full">
+<div class="absolute -top-10 right-1/4 w-96 h-96 rounded-full bg-secondary-fixed/30 blur-3xl pointer-events-none -z-10"></div>
+<div class="absolute top-48 left-10 w-72 h-72 rounded-full bg-sage-mist blur-2xl pointer-events-none -z-10"></div>
+<!-- 1. Header & Intelligent Status -->
+<header class="flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-8 border-b border-stone-line">
+<div class="space-y-2 max-w-2xl">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sage-mist border border-sage-line text-forest-ink">
+<span class="material-symbols-outlined text-[16px] text-forest" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="font-label-caps text-label-caps tracking-wider">ANÁLISE IA ATIVA • SINCRONIZADO HÁ 12 MIN</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-graphite tracking-tight">
+          Olá, José Lucas
+        </h1>
+<p class="font-body-base text-body-base text-graphite-soft leading-relaxed">
+          Seu assistente financeiro analisou suas últimas movimentações bancárias e notas. Você possui <span class="font-body-bold text-forest-ink">R$ 2.450,00</span> disponíveis para planejar com total tranquilidade neste ciclo.
+        </p>
+</div>
+<div class="flex items-center gap-3 shrink-0">
+<button class="h-11 px-4 rounded-xl bg-surface-card border border-stone-edge text-graphite hover:border-graphite-mist hover:bg-surface-subtle transition-all duration-200 font-headline-sm text-body-sm inline-flex items-center gap-2 shadow-sm" type="button">
+<span class="material-symbols-outlined text-[20px] text-graphite-soft">edit_calendar</span>
+<span>Adicionar Lançamento</span>
+</button>
+<button class="h-11 px-5 rounded-xl bg-forest hover:bg-forest-pressed text-on-primary transition-all duration-200 font-headline-sm text-body-sm inline-flex items-center gap-2 shadow-md hover:shadow-lg" type="button">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">document_scanner</span>
+<span>Escanear Comprovante ou OFX</span>
+</button>
+</div>
+</header>
+<!-- 2. Master Balance & Intelligent Allocation Card -->
+<section class="mt-8 rounded-2xl bg-surface-card border border-stone-line p-6 lg:p-8 shadow-sm">
+<div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 pb-6 border-b border-stone-line">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-sage-mist flex items-center justify-center text-forest">
+<span class="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-graphite">Balanço &amp; Alocação Mensal</h2>
+<span class="font-caption text-caption text-graphite-mist">Ciclo Vigente: 01 Nov – 30 Nov • Base Contábil ValorAI</span>
+</div>
+</div>
+<div class="flex items-center gap-2 bg-surface-subtle px-3 py-1.5 rounded-lg border border-stone-line font-code-otp text-[12px] text-graphite-soft">
+<span class="w-2 h-2 rounded-full bg-forest animate-pulse"></span>
+<span>EQUAÇÃO: RENDA − FIXOS = DISPONÍVEL</span>
+</div>
+</div>
+<!-- Financial Metrics Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 py-6 border-b border-stone-line">
+<div class="space-y-1">
+<span class="font-label-caps text-label-caps text-graphite-mist uppercase tracking-wide">Renda Mensal Declarada</span>
+<div class="font-stat-lg text-stat-lg text-graphite tabular-nums">
+            R$ 6.200<span class="text-graphite-mist text-headline-sm">,00</span>
+</div>
+<p class="font-caption text-caption text-graphite-soft flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-forest">arrow_circle_up</span>
+            Salário consolidado + rendimentos
+          </p>
+</div>
+<div class="space-y-1 md:border-l md:border-stone-line md:pl-6">
+<span class="font-label-caps text-label-caps text-graphite-mist uppercase tracking-wide">Gastos Fixos Comprometidos</span>
+<div class="font-stat-lg text-stat-lg text-graphite tabular-nums">
+            R$ 3.750<span class="text-graphite-mist text-headline-sm">,00</span>
+</div>
+<p class="font-caption text-caption text-graphite-soft flex items-center gap-1">
+<span class="font-body-bold text-graphite">60,5%</span> da sua renda total alocada
+          </p>
+</div>
+<div class="space-y-1 md:border-l md:border-stone-line md:pl-6 bg-sage-mist/40 p-4 rounded-xl border border-sage-line/60">
+<span class="font-label-caps text-label-caps text-forest uppercase tracking-wide">Saldo Disponível Planejável</span>
+<div class="font-stat-lg text-stat-lg text-forest-ink tabular-nums font-semibold">
+            R$ 2.450<span class="text-forest text-headline-sm">,00</span>
+</div>
+<p class="font-caption text-caption text-forest-ink flex items-center gap-1 font-body-bold">
+<span class="material-symbols-outlined text-[16px] text-forest">verified</span>
+            Margem real livre para aportes e variáveis
+          </p>
+</div>
+</div>
+<!-- Visual Split Bar -->
+<div class="py-6 space-y-3">
+<div class="flex items-center justify-between font-caption text-caption text-graphite">
+<div class="flex items-center gap-6">
+<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-graphite inline-block"></span>Gastos Fixos (60%)</span>
+<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-sage inline-block"></span>Variáveis Estimados (25%)</span>
+<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-forest inline-block"></span>Reserva &amp; Objetivos (15%)</span>
+</div>
+<span class="font-code-otp text-[12px] text-graphite-mist">100% DISTRIBUÍDO</span>
+</div>
+<div class="w-full h-3 bg-surface-container rounded-full overflow-hidden flex p-0.5 gap-0.5">
+<div class="h-full bg-graphite rounded-l-full" style="width: 60%;" title="Gastos Fixos: 60%"></div>
+<div class="h-full bg-sage" style="width: 25%;" title="Gastos Variáveis: 25%"></div>
+<div class="h-full bg-forest rounded-r-full" style="width: 15%;" title="Objetivos: 15%"></div>
+</div>
+</div>
+<!-- AI Assistant Contextual Recommendation Box -->
+<div class="rounded-xl bg-sage-mist border border-sage-line p-5 flex flex-col sm:flex-row items-start gap-4">
+<div class="w-9 h-9 rounded-lg bg-surface-card border border-sage-line flex items-center justify-center text-forest shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">psychology</span>
+</div>
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-graphite">Diretriz Preditiva ValorAI</span>
+<span class="font-label-caps text-[11px] px-2 py-0.5 rounded bg-surface-card text-forest font-semibold border border-sage-line">Inteligência Financeira</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+            Identificamos que <span class="font-body-bold text-graphite">82% das suas despesas fixas</span> vencem rigorosamente até o dia 10. Manter <span class="font-body-bold text-forest-ink">R$ 1.200,00</span> em liquidez imediata garantirá sua tranquilidade sem comprometer a meta ativa <strong class="text-graphite font-body-bold">“Começar a investir”</strong>.
+          </p>
+</div>
+</div>
+</section>
+<!-- 3. Asymmetric Two-Column Grid (1.7fr + 1fr) -->
+<div class="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!-- LEFT COLUMN (1.7fr ~= 7 or 8 columns in 12-col grid) -->
+<div class="lg:col-span-7 xl:col-span-8 space-y-6">
+<!-- Categorized Transactions Block -->
+<section class="rounded-2xl bg-surface-card border border-stone-line p-6 lg:p-7 shadow-sm">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-stone-line">
+<div>
+<h3 class="font-headline-md text-headline-md text-graphite">Movimentações &amp; Extração por IA</h3>
+<p class="font-caption text-caption text-graphite-mist">Fluxo auditado e alimentado por leitura inteligente de comprovantes e OFX</p>
+</div>
+<!-- Discrete Tabs -->
+<div class="inline-flex p-1 rounded-xl bg-surface-container-low border border-stone-line self-start sm:self-auto">
+<button class="px-3 py-1 rounded-lg bg-surface-card text-graphite font-body-bold text-caption shadow-xs" type="button">Todas</button>
+<button class="px-3 py-1 rounded-lg text-graphite-soft hover:text-graphite font-body-sm text-caption transition-colors" type="button">Automáticas (OFX)</button>
+<button class="px-3 py-1 rounded-lg text-graphite-soft hover:text-graphite font-body-sm text-caption transition-colors" type="button">Recibos IA (Foto)</button>
+</div>
+</div>
+<!-- Transaction List -->
+<div class="divide-y divide-stone-line">
+<!-- Item 1: Extracted via Receipt AI -->
+<div class="py-4 flex items-center justify-between gap-4 hover:bg-surface-subtle/60 px-2 rounded-xl transition-colors">
+<div class="flex items-center gap-3.5 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-sage-mist flex items-center justify-center text-forest shrink-0 border border-sage-line/60">
+<span class="material-symbols-outlined text-[20px]">photo_camera</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-graphite truncate">Pão de Açúcar • Supermercado</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-fixed/50 text-forest-ink font-label-caps text-[11px] border border-secondary-fixed-dim">
+<span class="w-1.5 h-1.5 rounded-full bg-forest"></span>
+                      Extraído via IA • 99% precisão
+                    </span>
+</div>
+<div class="flex items-center gap-3 mt-1 font-caption text-caption text-graphite-mist">
+<span>Hoje, 14:32</span>
+<span>•</span>
+<span class="px-2 py-0.5 rounded bg-surface-container font-medium text-graphite-soft">Alimentação &amp; Mercado</span>
+<span>•</span>
+<span class="font-code-otp text-[11px]">NFC-e #4492</span>
+</div>
+</div>
+</div>
+<div class="text-right shrink-0">
+<div class="font-headline-md text-headline-md text-graphite tabular-nums font-semibold">− R$ 342,80</div>
+<span class="font-caption text-[12px] text-forest flex items-center justify-end gap-1">
+<span class="material-symbols-outlined text-[14px]">check</span> Validado
+                </span>
+</div>
+</div>
+<!-- Item 2: Extracted via OFX / Bank Sync -->
+<div class="py-4 flex items-center justify-between gap-4 hover:bg-surface-subtle/60 px-2 rounded-xl transition-colors">
+<div class="flex items-center gap-3.5 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center text-graphite shrink-0 border border-stone-edge">
+<span class="material-symbols-outlined text-[20px]">account_balance</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-graphite truncate">Aluguel &amp; Condomínio Residencial</span>
+<span class="px-2 py-0.5 rounded bg-surface-container-high text-graphite font-label-caps text-[11px]">
+                      Sincronização OFX
+                    </span>
+</div>
+<div class="flex items-center gap-3 mt-1 font-caption text-caption text-graphite-mist">
+<span>05 Nov, 08:15</span>
+<span>•</span>
+<span class="px-2 py-0.5 rounded bg-surface-container font-medium text-graphite-soft">Habitação (Fixo)</span>
+<span>•</span>
+<span class="font-code-otp text-[11px]">DEB.AUTOMATICO</span>
+</div>
+</div>
+</div>
+<div class="text-right shrink-0">
+<div class="font-headline-md text-headline-md text-graphite tabular-nums font-semibold">− R$ 2.400,00</div>
+<span class="font-caption text-[12px] text-graphite-mist">Compromisso fixo</span>
+</div>
+</div>
+<!-- Item 3: Extracted via Receipt AI (Uber/Transporte) -->
+<div class="py-4 flex items-center justify-between gap-4 hover:bg-surface-subtle/60 px-2 rounded-xl transition-colors">
+<div class="flex items-center gap-3.5 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-sage-mist flex items-center justify-center text-forest shrink-0 border border-sage-line/60">
+<span class="material-symbols-outlined text-[20px]">receipt_long</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-graphite truncate">Uber do Brasil • Deslocamento</span>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-fixed/50 text-forest-ink font-label-caps text-[11px] border border-secondary-fixed-dim">
+<span class="w-1.5 h-1.5 rounded-full bg-forest"></span>
+                      PDF Lido por IA
+                    </span>
+</div>
+<div class="flex items-center gap-3 mt-1 font-caption text-caption text-graphite-mist">
+<span>04 Nov, 19:40</span>
+<span>•</span>
+<span class="px-2 py-0.5 rounded bg-surface-container font-medium text-graphite-soft">Transporte</span>
+</div>
+</div>
+</div>
+<div class="text-right shrink-0">
+<div class="font-headline-md text-headline-md text-graphite tabular-nums font-semibold">− R$ 42,90</div>
+<span class="font-caption text-[12px] text-forest flex items-center justify-end gap-1">
+<span class="material-symbols-outlined text-[14px]">check</span> Validado
+                </span>
+</div>
+</div>
+<!-- Item 4: Manual Entry with Tag -->
+<div class="py-4 flex items-center justify-between gap-4 hover:bg-surface-subtle/60 px-2 rounded-xl transition-colors">
+<div class="flex items-center gap-3.5 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-surface-subtle flex items-center justify-center text-graphite-soft shrink-0 border border-stone-edge">
+<span class="material-symbols-outlined text-[20px]">keyboard</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-graphite truncate">Livraria Cultura • Livros Técnicos</span>
+<span class="px-2 py-0.5 rounded bg-surface-container text-graphite-soft font-label-caps text-[11px]">
+                      Entrada Manual
+                    </span>
+</div>
+<div class="flex items-center gap-3 mt-1 font-caption text-caption text-graphite-mist">
+<span>02 Nov, 16:10</span>
+<span>•</span>
+<span class="px-2 py-0.5 rounded bg-surface-container font-medium text-graphite-soft">Educação</span>
+</div>
+</div>
+</div>
+<div class="text-right shrink-0">
+<div class="font-headline-md text-headline-md text-graphite tabular-nums font-semibold">− R$ 119,00</div>
+<span class="font-caption text-[12px] text-graphite-mist">Lançado via Web</span>
+</div>
+</div>
+<!-- Item 5: Inflow Income Credit -->
+<div class="py-4 flex items-center justify-between gap-4 hover:bg-surface-subtle/60 px-2 rounded-xl transition-colors">
+<div class="flex items-center gap-3.5 min-w-0">
+<div class="w-10 h-10 rounded-xl bg-secondary-fixed flex items-center justify-center text-forest-ink shrink-0 border border-secondary-fixed-dim">
+<span class="material-symbols-outlined text-[20px]">payments</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-graphite truncate">Transferência Recebida • Consultoria</span>
+<span class="px-2 py-0.5 rounded bg-secondary-fixed-dim text-on-secondary-fixed-variant font-label-caps text-[11px]">
+                      Receita Extra
+                    </span>
+</div>
+<div class="flex items-center gap-3 mt-1 font-caption text-caption text-graphite-mist">
+<span>01 Nov, 11:00</span>
+<span>•</span>
+<span class="px-2 py-0.5 rounded bg-surface-container font-medium text-graphite-soft">Renda / Serviços</span>
+</div>
+</div>
+</div>
+<div class="text-right shrink-0">
+<div class="font-headline-md text-headline-md text-forest tabular-nums font-semibold">+ R$ 1.200,00</div>
+<span class="font-caption text-[12px] text-forest-ink">Alocado p/ Reserva</span>
+</div>
+</div>
+</div>
+<div class="pt-4 border-t border-stone-line flex items-center justify-between">
+<span class="font-caption text-caption text-graphite-mist">Exibindo 5 de 38 movimentações neste mês</span>
+<button class="font-body-bold text-caption text-forest hover:text-forest-pressed inline-flex items-center gap-1 transition-colors" type="button">
+<span>Abrir Extrato Completo &amp; Filtros</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</section>
+<!-- Intelligent Category Limit Callout (Limit Gold) -->
+<div class="rounded-xl bg-[#fffdf7] border border-limit-gold-accent/40 p-5 shadow-xs relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1.5 h-full bg-limit-gold-accent"></div>
+<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+<div class="flex items-start gap-3.5">
+<div class="w-9 h-9 rounded-lg bg-limit-gold-accent/15 flex items-center justify-center text-limit-gold-fill shrink-0">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-graphite">Aviso Preventivo: Limite de Categoria</span>
+<span class="font-label-caps text-[11px] px-2 py-0.5 rounded bg-limit-gold-accent/20 text-limit-gold-fill font-semibold">92% Consumido</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+                  Gastos com <span class="font-body-bold text-graphite">“Lazer &amp; Restaurantes”</span> atingiram <strong class="text-graphite tabular-nums">R$ 550,00</strong> do teto sugerido de R$ 600,00. O limite funciona como balizador visual de disciplina financeira e não bloqueia suas transações reais.
+                </p>
+</div>
+</div>
+<button class="h-9 px-3 rounded-lg border border-limit-gold-accent/60 bg-surface-card text-graphite font-body-bold text-caption hover:bg-limit-gold-accent/10 transition-colors shrink-0" type="button">
+              Ajustar Teto
+            </button>
+</div>
+</div>
+<!-- Ledger Micro Visualization -->
+<div class="rounded-2xl bg-surface-card border border-stone-line p-6 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<div class="space-y-0.5">
+<h4 class="font-headline-sm text-headline-sm text-graphite">Ritmo Diário de Despesas (Novembro)</h4>
+<p class="font-caption text-caption text-graphite-mist">Projeção de estabilidade sem picos desnecessários</p>
+</div>
+<span class="font-code-otp text-[12px] text-graphite-soft bg-surface-subtle px-2 py-1 rounded border border-stone-line">MÉDIA: R$ 84,20 / DIA</span>
+</div>
+<!-- Inline Minimal SVG Sparkline / Bar visualization -->
+<div class="w-full pt-2">
+<svg class="w-full h-24 text-forest" fill="none" preserveaspectratio="none" viewbox="0 0 600 90">
+<!-- Grid lines -->
+<line stroke="#e2e3dd" stroke-dasharray="3 3" x1="0" x2="600" y1="20" y2="20"></line>
+<line stroke="#e2e3dd" stroke-dasharray="3 3" x1="0" x2="600" y1="50" y2="50"></line>
+<line stroke="#e2e3dd" stroke-width="1" x1="0" x2="600" y1="80" y2="80"></line>
+<!-- Subtle area gradient -->
+<defs>
+<lineargradient id="sageGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#7e9f8c" stop-opacity="0.35"></stop>
+<stop offset="100%" stop-color="#7e9f8c" stop-opacity="0.0"></stop>
+</lineargradient>
+</defs>
+<path d="M0,75 L25,72 L50,68 L75,70 L100,30 L125,55 L150,62 L175,60 L200,45 L225,50 L250,55 L275,35 L300,58 L325,62 L350,48 L375,52 L400,60 L425,58 L450,55 L475,54 L500,50 L525,48 L550,46 L575,44 L600,42 L600,85 L0,85 Z" fill="url(#sageGradient)"></path>
+<path d="M0,75 L25,72 L50,68 L75,70 L100,30 L125,55 L150,62 L175,60 L200,45 L225,50 L250,55 L275,35 L300,58 L325,62 L350,48 L375,52 L400,60 L425,58 L450,55 L475,54 L500,50 L525,48 L550,46 L575,44 L600,42" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+<!-- Peak Marker (Dia 5 - Aluguel) -->
+<circle cx="100" cy="30" fill="#3c6a53" r="4"></circle>
+</svg>
+<div class="flex justify-between items-center text-caption text-graphite-mist font-code-otp text-[11px] mt-2">
+<span>01 NOV</span>
+<span>05 NOV (Pico Fixos)</span>
+<span>10 NOV</span>
+<span>15 NOV</span>
+<span>20 NOV</span>
+<span>25 NOV</span>
+<span>30 NOV (Proj.)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- RIGHT COLUMN (1fr ~= 5 or 4 columns in 12-col grid) -->
+<div class="lg:col-span-5 xl:col-span-4 space-y-6">
+<!-- Intelligent Capture Channels Dock (The 3 channels from spec) -->
+<section class="rounded-2xl bg-surface-card border border-stone-line p-6 shadow-sm">
+<div class="flex items-center justify-between pb-4 border-b border-stone-line">
+<h3 class="font-headline-md text-headline-md text-graphite">Canais de Entrada Inteligente</h3>
+<span class="w-2.5 h-2.5 rounded-full bg-forest"></span>
+</div>
+<div class="mt-4 space-y-4">
+<!-- Channel 1: Photo / Receipt Drop Dock -->
+<div class="rounded-xl border border-dashed border-sage bg-sage-mist/60 hover:bg-sage-mist p-4 transition-all duration-200 group cursor-pointer">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-card border border-sage-line flex items-center justify-center text-forest shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+<span class="material-symbols-outlined text-[22px]">add_a_photo</span>
+</div>
+<div class="space-y-1">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm text-graphite">1. Leitura de Comprovante IA</span>
+<span class="px-1.5 py-0.2 rounded bg-forest text-on-primary text-[10px] font-bold">OCR</span>
+</div>
+<p class="font-caption text-caption text-graphite-soft leading-snug">
+                    Arraste a foto da nota ou cupom fiscal. O motor extrai valor, data, CNPJ e sugere a categoria de forma autônoma.
+                  </p>
+</div>
+</div>
+<div class="mt-3 pt-3 border-t border-sage-line/60 flex items-center justify-between font-caption text-[12px] text-forest-ink">
+<span class="inline-flex items-center gap-1 font-body-bold">
+<span class="material-symbols-outlined text-[15px]">upload_file</span> Arrastar imagem ou PDF
+                </span>
+<span class="font-code-otp text-[11px] text-graphite-mist">PNG, JPG até 10MB</span>
+</div>
+</div>
+<!-- Channel 2: Bank Statement (OFX / CSV) -->
+<div class="rounded-xl border border-stone-line bg-surface-subtle hover:bg-surface-container-low p-4 transition-all duration-200 cursor-pointer">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-card border border-stone-edge flex items-center justify-center text-graphite shrink-0 shadow-xs">
+<span class="material-symbols-outlined text-[22px]">file_open</span>
+</div>
+<div class="space-y-1">
+<span class="font-headline-sm text-headline-sm text-graphite">2. Importação Bancária</span>
+<p class="font-caption text-caption text-graphite-soft leading-snug">
+                    Suporta extratos padronizados <strong class="text-graphite font-body-bold">OFX</strong> e planilhas <strong class="text-graphite font-body-bold">CSV</strong> emitidos por qualquer banco brasileiro.
+                  </p>
+</div>
+</div>
+</div>
+<!-- Channel 3: Quick Manual Entry -->
+<div class="rounded-xl border border-stone-line bg-surface-subtle hover:bg-surface-container-low p-4 transition-all duration-200 cursor-pointer">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-card border border-stone-edge flex items-center justify-center text-graphite-soft shrink-0 shadow-xs">
+<span class="material-symbols-outlined text-[22px]">dialpad</span>
+</div>
+<div class="space-y-1">
+<span class="font-headline-sm text-headline-sm text-graphite">3. Lançamento Rápido Manual</span>
+<p class="font-caption text-caption text-graphite-soft leading-snug">
+                    Formulário direto em 3 passos para despesas em dinheiro vivo ou sem recibo físico.
+                  </p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Current Financial Goal -->
+<section class="rounded-2xl bg-surface-card border border-stone-line p-6 shadow-sm">
+<div class="flex items-center justify-between pb-3 border-b border-stone-line">
+<span class="font-label-caps text-label-caps text-graphite-mist uppercase">Objetivo Prioritário</span>
+<span class="font-caption text-caption text-forest font-semibold flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-forest"></span> Em Andamento
+            </span>
+</div>
+<div class="mt-4 space-y-3">
+<div class="flex items-center justify-between">
+<h4 class="font-headline-md text-headline-md text-graphite">Começar a investir</h4>
+<span class="font-headline-sm text-headline-sm text-forest-ink tabular-nums">R$ 2.000 / R$ 5.000</span>
+</div>
+<!-- Progress Bar -->
+<div class="w-full h-3 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-forest rounded-full transition-all duration-500" style="width: 40%;"></div>
+</div>
+<div class="flex items-center justify-between font-caption text-caption text-graphite-soft pt-1">
+<span>Meta inicial de segurança</span>
+<span class="font-body-bold text-graphite">40% alcançado</span>
+</div>
+<div class="rounded-lg bg-sage-mist/70 p-3 border border-sage-line/60 flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[18px] text-forest shrink-0">insights</span>
+<span class="font-caption text-caption text-forest-ink leading-tight">
+                No ritmo de aportes de R$ 750/mês, você concluirá esta reserva em <strong class="font-body-bold">4 meses</strong> (Março/2025).
+              </span>
+</div>
+</div>
+</section>
+<!-- Educational Guides Module (Pre-loaded from System Specs) -->
+<section class="rounded-2xl bg-surface-card border border-stone-line p-6 shadow-sm space-y-4">
+<div class="flex items-center justify-between pb-3 border-b border-stone-line">
+<div>
+<h3 class="font-headline-md text-headline-md text-graphite">Educação Financeira</h3>
+<p class="font-caption text-caption text-graphite-mist">Guias práticos elaborados pela consultoria</p>
+</div>
+<span class="material-symbols-outlined text-graphite-soft text-[20px]">menu_book</span>
+</div>
+<div class="space-y-3">
+<!-- Guide 1 -->
+<a class="block p-3 rounded-xl hover:bg-surface-subtle border border-transparent hover:border-stone-line transition-all group" href="#">
+<div class="flex items-center justify-between gap-2">
+<span class="font-headline-sm text-[15px] text-graphite group-hover:text-forest transition-colors leading-snug">
+                  Como estruturar sua reserva de emergência sem sufoco
+                </span>
+<span class="material-symbols-outlined text-[16px] text-graphite-mist group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+<div class="flex items-center gap-3 mt-1.5 font-caption text-[12px] text-graphite-mist">
+<span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-forest"></span> 5 min de leitura</span>
+<span>•</span>
+<span class="text-forest-ink font-body-bold">Concluído</span>
+</div>
+<div class="w-full h-1 bg-surface-container rounded-full mt-2">
+<div class="w-full h-full bg-sage rounded-full"></div>
+</div>
+</a>
+<!-- Guide 2 -->
+<a class="block p-3 rounded-xl hover:bg-surface-subtle border border-transparent hover:border-stone-line transition-all group" href="#">
+<div class="flex items-center justify-between gap-2">
+<span class="font-headline-sm text-[15px] text-graphite group-hover:text-forest transition-colors leading-snug">
+                  Diferença entre saldo em conta e margem planejável
+                </span>
+<span class="material-symbols-outlined text-[16px] text-graphite-mist group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+<div class="flex items-center gap-3 mt-1.5 font-caption text-[12px] text-graphite-mist">
+<span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-limit-gold-accent"></span> 4 min de leitura</span>
+<span>•</span>
+<span>Em leitura (60%)</span>
+</div>
+<div class="w-full h-1 bg-surface-container rounded-full mt-2">
+<div class="w-3/5 h-full bg-sage rounded-full"></div>
+</div>
+</a>
+<!-- Guide 3 -->
+<a class="block p-3 rounded-xl hover:bg-surface-subtle border border-transparent hover:border-stone-line transition-all group" href="#">
+<div class="flex items-center justify-between gap-2">
+<span class="font-headline-sm text-[15px] text-graphite group-hover:text-forest transition-colors leading-snug">
+                  Como categorizar despesas variáveis sem obsessão
+                </span>
+<span class="material-symbols-outlined text-[16px] text-graphite-mist group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
+<div class="flex items-center gap-3 mt-1.5 font-caption text-[12px] text-graphite-mist">
+<span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-stone-edge"></span> 6 min de leitura</span>
+<span>•</span>
+<span>Não iniciado</span>
+</div>
+<div class="w-full h-1 bg-surface-container rounded-full mt-2">
+<div class="w-0 h-full bg-sage rounded-full"></div>
+</div>
+</a>
+</div>
+</section>
+</div>
+</div>
+</div>
+</div></div></main><footer class="w-full bg-surface border-t border-stone-line py-8"><div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 font-caption text-caption text-graphite-soft"><div><span>© 2024 Nulfinance Inc. • Disciplined Ledger System</span></div><div class="flex items-center gap-4"><a class="text-graphite-soft hover:text-graphite underline underline-offset-4" href="#">Documentação &amp; ATA</a><span class="text-stone-edge">•</span><span class="font-code-otp text-[11px] tracking-normal text-graphite-mist">REV-2024.11-STABLE</span></div></div></footer></body></html>
