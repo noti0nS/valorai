@@ -36,6 +36,12 @@
       "sourceType": "github",
       "skillPath": "skills/prd/SKILL.md",
       "computedHash": "1f3e1f005fc40fda85d250ae906c8ee4f7e8e833e23adfeca6542c19609fd7cd"
+    },
+    "stitch::extract-design-md": {
+      "source": "google-labs-code/stitch-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/stitch-design/skills/extract-design-md/SKILL.md",
+      "computedHash": "73cddd92063421923afbe00b423b0027aecd251a2c84bfda9c31bf992baf006b"
     }
   }
 }
