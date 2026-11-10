@@ -57,6 +57,29 @@ Use dados fictícios e uma senha exclusiva para teste. A desativação preserva 
 
 ## Executar localmente
 
+### Com Docker Compose (Recomendado)
+
+Suba todos os recursos do ecossistema local (API Django no Python Worker, banco D1 local, Durable Object coordenador e Frontend Astro) prontos para teste com um comando:
+
+```powershell
+docker compose up --build
+```
+
+- **Aplicação Completa (Worker + Assets + D1):** [http://localhost:8787](http://localhost:8787)
+- **Frontend com Hot-Reload (Astro Dev Server):** [http://localhost:4321](http://localhost:4321) (encaminha `/api` para o Worker)
+- **Bateria de testes automatizados no Docker:**
+  ```powershell
+  docker compose run --rm test
+  ```
+- **Encerrar containers:**
+  ```powershell
+  docker compose down
+  # ou limpe os volumes persistidos do D1:
+  docker compose down -v
+  ```
+
+### Sem Docker (Manual)
+
 Requisitos: **Node 24.22+ na linha 24.x**, npm e navegador moderno. As outras linhas aceitas pelo CLI estão em `engines`. Instale as dependências fixadas nos lockfiles:
 
 ```powershell

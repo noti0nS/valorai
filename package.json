@@ -13,6 +13,9 @@
     "check": "astro check",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
+    "compose:up": "docker compose up --build",
+    "compose:down": "docker compose down",
+    "compose:test": "docker compose run --rm test",
     "deploy": "npm run build && uv run --directory server/python pywrangler deploy --env production"
   },
   "dependencies": {

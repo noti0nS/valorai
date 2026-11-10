@@ -1,0 +1,38 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies & Environments
+node_modules
+server/node_modules
+.venv
+server/python/.venv
+server/python/.venv-workers
+server/python/python_modules
+
+# Cloudflare state & local storage
+.wrangler
+server/python/.wrangler
+.cloudflare
+server/.cloudflare
+
+# Build artifacts
+dist
+.astro
+
+# Python cache & test artifacts
+__pycache__
+*.pyc
+.pytest_cache
+
+# Test results and logs
+test-results
+playwright-report
+*.log
+
+# OS & Editor temp files
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+.~lock.*

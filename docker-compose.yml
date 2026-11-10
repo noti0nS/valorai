@@ -1,0 +1,59 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    container_name: valorai-api
+    ports:
+      - "8787:8787"
+    environment:
+      - ENVIRONMENT=development
+      - EMAIL_MODE=demo
+      - TURNSTILE_SITE_KEY=
+    volumes:
+      # Persist local Cloudflare D1 and Durable Objects SQLite state across restarts
+      - wrangler-state:/app/server/python/.wrangler/state
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8787/api/config || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  web:
+    build:
+      context: .
+      target: web
+    container_name: valorai-web
+    ports:
+      - "4321:4321"
+    environment:
+      - API_URL=http://api:8787
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      # Mount frontend source files for live HMR reload during development
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./shared:/app/shared
+    restart: unless-stopped
+
+  test:
+    build:
+      context: .
+      target: api
+    profiles:
+      - test
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        echo "==> Running frontend validation tests..."
+        npm test
+        echo "==> Running backend Python unit tests..."
+        cd server/python && uv run --python 3.14 pytest
+
+volumes:
+  wrangler-state:
+    name: valorai_wrangler_state
