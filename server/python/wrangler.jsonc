@@ -23,7 +23,9 @@
   "durable_objects": {
     "bindings": [{ "name": "AUTH", "class_name": "AuthCoordinator" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AuthCoordinator"] }],
+  "exports": {
+    "AuthCoordinator": { "type": "durable-object", "storage": "sqlite" }
+  },
   "vars": {
     "ENVIRONMENT": "development",
     "EMAIL_MODE": "demo",
@@ -31,10 +33,22 @@
   },
   "env": {
     "production": {
+      "name": "valorai-prototype",
       "vars": {
         "ENVIRONMENT": "production",
         "EMAIL_MODE": "demo",
         "TURNSTILE_SITE_KEY": "0x4AAAAAAFrPCsARbdASrFUU"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "valorai-prototype",
+          "database_id": "9186a9b0-dce5-442b-96ee-a3e67b4fe2b0",
+          "migrations_dir": "../migrations"
+        }
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "AUTH", "class_name": "AuthCoordinator" }]
       }
     }
   }

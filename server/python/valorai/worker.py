@@ -181,8 +181,14 @@ def _code_number() -> int:
 
 def turnstile_verify(secret: str, token: str, remote_ip: str) -> dict:
     import json
-    from urllib.request import Request, urlopen
-    payload = f"secret={secret}&response={token}&remoteip={remote_ip}".encode()
-    request = Request("https://challenges.cloudflare.com/turnstile/v0/siteverify", data=payload, method="POST")
-    with urlopen(request, timeout=10) as response:
-        return json.load(response)
+    from urllib.parse import urlencode
+    from pyodide.ffi import run_sync
+    from workers import fetch
+
+    response = run_sync(fetch(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        method="POST",
+        body=urlencode({"secret": secret, "response": token, "remoteip": remote_ip}),
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    ))
+    return json.loads(run_sync(response.text()))
