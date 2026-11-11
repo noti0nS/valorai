@@ -7,6 +7,17 @@ import '@fontsource-variable/instrument-sans';
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
+    <script is:inline>
+      (function () {
+        try {
+          var stored = localStorage.getItem('valorai-theme');
+          var theme = stored === 'light' || stored === 'dark' ? stored : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', theme);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#242830' : '#f5f5f1');
+        } catch (e) {}
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f5f5f1" />
     <meta name="description" content="Seu dinheiro com mais clareza. Conheça o protótipo de cadastro do ValorAI, seu espaço para uma vida financeira em equilíbrio." />

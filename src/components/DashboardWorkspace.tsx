@@ -8,8 +8,8 @@ import {
   LayoutGrid, ReceiptText, ScanLine, ChevronDown, UserRound,
   SlidersHorizontal, Info, LogOut, UserX, BadgeCheck, Check
 } from 'lucide-react';
-import productLogo from '../../assets/ValorAI.svg?url';
-import companyLogo from '../../assets/Nulfinance_Inc.svg?url';
+import { CompanyMark, ProductMark } from './BrandMark';
+import { ThemeToggle } from './ThemeToggle';
 import {
   goals, standardCategories, transactionKinds, paymentMethods, suggestCategory,
   states, maskPhone, maskPostal, profileUpdateSchema, fieldErrors, type Finance
@@ -1028,7 +1028,7 @@ export default function DashboardWorkspace({
       <header className="dash-header">
         <div className="dash-header-left">
           <a className="brand" href="/" aria-label="ValorAI — início">
-            <img src={productLogo} alt="ValorAI" width="108" height="35" />
+            <ProductMark />
           </a>
           <nav className="header-nav" aria-label="Seções do painel">
             {navItems.map(({ id, label }) => (
@@ -1064,6 +1064,7 @@ export default function DashboardWorkspace({
             {entryOptions}
           </Dropdown>
           <span className="header-divider" aria-hidden="true" />
+          <ThemeToggle />
           <Dropdown
             triggerClassName="profile-trigger"
             triggerLabel={`Painel do perfil de ${displayName}`}
@@ -1340,21 +1341,21 @@ export default function DashboardWorkspace({
                   <svg className="sparkline-svg" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true">
                     <defs>
                       <linearGradient id="valoraiSparkGrad" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#3c6a53" stopOpacity="0.18" />
-                        <stop offset="100%" stopColor="#3c6a53" stopOpacity="0.0" />
+                        <stop offset="0%" stopColor="var(--chart)" stopOpacity="0.18" />
+                        <stop offset="100%" stopColor="var(--chart)" stopOpacity="0" />
                       </linearGradient>
                     </defs>
                     <path d={sparkline.area} fill="url(#valoraiSparkGrad)" />
                     <path
                       d={sparkline.line}
                       fill="none"
-                      stroke="#3c6a53"
+                      stroke="var(--chart)"
                       strokeWidth="2.2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       vectorEffect="non-scaling-stroke"
                     />
-                    <circle cx={sparkline.last.x} cy={sparkline.last.y} r="3.5" fill="#3c6a53" />
+                    <circle cx={sparkline.last.x} cy={sparkline.last.y} r="3.5" fill="var(--chart)" />
                   </svg>
                   <div className="sparkline-axis">
                     <span>DIA 01</span>
@@ -1822,7 +1823,7 @@ export default function DashboardWorkspace({
       <footer className="site-footer dash-footer">
         <div>
           <span>Uma iniciativa</span>
-          <img src={companyLogo} alt="Nulfinance Inc." width="84" height="28" />
+          <CompanyMark />
         </div>
         <div className="dash-footer-meta">
           <button type="button" className="text-link muted" onClick={onOpenAbout}>Sobre o protótipo</button>

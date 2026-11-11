@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type SyntheticEvent, type ReactNode } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import { ArrowRight, ArrowLeft, Check, Eye, EyeOff, Mail, Wallet, CreditCard, PiggyBank, TrendingUp, X, Info, LoaderCircle, LogOut, CheckCircle2, MapPin, Clock3, CircleAlert, PenLine, FileUp, Camera, BellRing, RotateCcw } from 'lucide-react';
-import productLogo from '../../assets/ValorAI.svg?url';
-import companyLogo from '../../assets/Nulfinance_Inc.svg?url';
+import { CompanyMark, ProductMark } from './BrandMark';
+import { ThemeToggle } from './ThemeToggle';
 import { personalSchema, accessSchema, financeSchema, fieldErrors, goals, maskCpf, maskPhone, maskPostal, digits, states } from '../../shared/validation';
 import DashboardWorkspace, { LightDismissModal, type AccountSummary, type DashboardData, type DashboardLesson, type ProfileData } from './DashboardWorkspace';
 
@@ -37,10 +37,12 @@ function BotCheck({ siteKey, onToken, reset }: { siteKey: string; onToken: (toke
     let id: string | undefined; let disposed = false;
     const fail = () => { if (!disposed) { callback.current(''); setFailed(true); } };
     const render = () => {
-      if (!disposed && container.current && window.turnstile && !id) {
+      if (disposed || !container.current || !window.turnstile) return;
+      if (id) { window.turnstile.remove(id); id = undefined; }
+      if (!id) {
         try {
           id = window.turnstile.render(container.current, {
-            sitekey: siteKey, theme: 'light', size: 'flexible',
+            sitekey: siteKey, theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light', size: 'flexible',
             callback: (token: string) => { if (!disposed) { setFailed(false); callback.current(token); } },
             'expired-callback': () => callback.current(''),
             'error-callback': fail, 'timeout-callback': fail,
@@ -51,8 +53,9 @@ function BotCheck({ siteKey, onToken, reset }: { siteKey: string; onToken: (toke
     let script = document.querySelector<HTMLScriptElement>('#turnstile-script');
     if (retry > 0 && script && !window.turnstile) { script.remove(); script = null; }
     if (!script) { script = document.createElement('script'); script.id = 'turnstile-script'; script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; script.async = true; document.head.append(script); }
-    script.addEventListener('load', render); script.addEventListener('error', fail); render();
-    return () => { disposed = true; script?.removeEventListener('load', render); script?.removeEventListener('error', fail); if (id) window.turnstile?.remove(id); callback.current(''); };
+    const onTheme = () => render();
+    script.addEventListener('load', render); script.addEventListener('error', fail); window.addEventListener('valorai-theme', onTheme); render();
+    return () => { disposed = true; script?.removeEventListener('load', render); script?.removeEventListener('error', fail); window.removeEventListener('valorai-theme', onTheme); if (id) window.turnstile?.remove(id); callback.current(''); };
   }, [siteKey, reset, retry]);
   return <><div className="bot-check" ref={container} />{failed && <div className="note" role="alert"><Info size={16} /><span>A verificação de segurança não foi concluída. Confira sua conexão. <button type="button" className="link-button" onClick={() => setRetry(v => v + 1)}>Tentar novamente</button></span></div>}</>;
 }
@@ -303,9 +306,10 @@ export default function RegistrationApp() {
     ) : (
       <>
         <header className="site-header">
-          <a className="brand" href="/" aria-label="ValorAI — início"><img src={productLogo} alt="ValorAI" width="118" height="38" /></a>
+          <a className="brand" href="/" aria-label="ValorAI — início"><ProductMark /></a>
           <span className="tag">Protótipo</span>
           <div className="header-actions">
+            <ThemeToggle />
             <button className="button button-ghost button-small header-about" onClick={() => setModal('about')}>Sobre o protótipo</button>
             {account ? <button className="button button-secondary button-small" onClick={logout} disabled={busy || loadingSession}>Sair<LogOut size={16} /></button>
               : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}
@@ -378,7 +382,7 @@ export default function RegistrationApp() {
           {(view === 'login' || view === 'register') && <ProductPreview />}
           <div className="sr-only" aria-live="polite">{view === 'register' ? `Etapa ${step + 1} de 4: ${stepNames[step]}` : ''}</div>
         </main>
-        <footer className="site-footer"><div><span>Uma iniciativa</span><img src={companyLogo} alt="Nulfinance Inc." width="84" height="28" /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
+        <footer className="site-footer"><div><span>Uma iniciativa</span><CompanyMark /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
       </>
     )}
     {modal === 'about' && <Modal title="Sobre este protótipo" onClose={() => setModal(null)}><div className="modal-body">
