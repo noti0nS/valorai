@@ -270,144 +270,117 @@ export default function RegistrationApp() {
   const switchView = (next: 'login' | 'register') => { setView(next); setStep(0); setError(''); setNotice(''); };
   const errorAlert = error && <div className="alert alert-error" role="alert"><CircleAlert size={18} /><span>{error}</span><button type="button" aria-label="Fechar aviso" onClick={() => setError('')}><X size={16} /></button></div>;
   const noticeAlert = notice && <div className="alert alert-success" role="status"><CheckCircle2 size={18} /><span>{notice}</span></div>;
-  const initials = account?.name
-    ? account.name.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('')
-    : 'VA';
+  const isDashboard = view === 'dashboard' && !!account;
 
-  return <MotionConfig reducedMotion="user"><div className="app-shell">
-    <header className="site-header">
-      <a className="brand" href="/" aria-label="ValorAI — início"><img src={productLogo} alt="ValorAI" width="118" height="38" /></a>
-      <span className="tag">Protótipo</span>
-      {view === 'dashboard' && account && (
-        <nav className="header-nav" aria-label="Navegação do painel">
-          {([
-            ['overview', 'Visão Geral'],
-            ['transactions', 'Transações & Extratos'],
-            ['planning', 'Planejamento'],
-            ['guides', 'Guias'],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              className={`header-nav-link ${dashTab === id ? 'active' : ''}`}
-              aria-current={dashTab === id ? 'page' : undefined}
-              onClick={() => setDashTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-      )}
-      <div className="header-actions">
-        <button className="button button-ghost button-small header-about" onClick={() => setModal('about')}>Sobre o protótipo</button>
-        {view === 'dashboard' && account && (
-          <div className="user-pill" title={`${account.name} (${account.city} · ${account.state})`}>
-            <span className="user-avatar" aria-hidden="true">
-              {profile?.avatar || account.avatar ? <img src={(profile?.avatar || account.avatar) ?? ''} alt="" /> : initials}
-            </span>
-            <span className="user-pill-text">
-              <strong>{account.name.split(' ')[0]}</strong>
-              <small>{account.city || 'Cliente'}</small>
-            </span>
+  return <MotionConfig reducedMotion="user"><div className={`app-shell ${isDashboard ? 'dash-shell' : ''}`}>
+    {isDashboard && account ? (
+      <DashboardWorkspace
+        account={account}
+        dashboard={dashboard}
+        profile={profile}
+        lessons={lessons}
+        activeTab={dashTab}
+        onSelectTab={setDashTab}
+        onEditFinanceProfile={() => { setStep(3); setView('register'); }}
+        onOpenDeactivate={() => { setDeactivateError(''); setModal('deactivate'); }}
+        onOpenAbout={() => setModal('about')}
+        onLogout={logout}
+        sessionBusy={busy || loadingSession}
+        onOpenLesson={(item) => setLesson(item)}
+        onRefreshDashboard={(nextDashboard, nextAccount, nextProfile) => {
+          setDashboard(nextDashboard);
+          if (nextDashboard.lessons?.length) setLessons(nextDashboard.lessons);
+          if (nextAccount) setAccount(nextAccount);
+          if (nextProfile) setProfile(nextProfile);
+        }}
+        apiCall={api}
+        headingRef={heading}
+        errorAlert={errorAlert}
+        noticeAlert={noticeAlert}
+        setNotice={setNotice}
+        setError={setError}
+      />
+    ) : (
+      <>
+        <header className="site-header">
+          <a className="brand" href="/" aria-label="ValorAI — início"><img src={productLogo} alt="ValorAI" width="118" height="38" /></a>
+          <span className="tag">Protótipo</span>
+          <div className="header-actions">
+            <button className="button button-ghost button-small header-about" onClick={() => setModal('about')}>Sobre o protótipo</button>
+            {account ? <button className="button button-secondary button-small" onClick={logout} disabled={busy || loadingSession}>Sair<LogOut size={16} /></button>
+              : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}
           </div>
-        )}
-        {account ? <button className="button button-secondary button-small" onClick={logout} disabled={busy || loadingSession}>Sair<LogOut size={16} /></button>
-          : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}
-      </div>
-    </header>
-    <main id="main" className={view === 'dashboard' ? 'dashboard' : view === 'deactivated' ? 'state-page' : 'auth'}>
-      <AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
-        {view === 'register' && <>
-          {!editing && <div className="progress"><p className="progress-label" aria-hidden="true">Etapa {step + 1} de 4 · <strong>{stepNames[step]}</strong></p>
-            <ol aria-label="Etapas do cadastro">{stepNames.map((label, i) => <li key={label} className={i < step ? 'complete' : i === step ? 'current' : ''} aria-current={i === step ? 'step' : undefined}><span>{label}<span className="sr-only">{i < step ? ' (concluída)' : ''}</span></span></li>)}</ol></div>}
-          <div className="page-heading"><h1 tabIndex={-1} ref={heading}>{titles[step]}</h1><p>{descriptions[step]}</p></div>
-          {errorAlert}{noticeAlert}
-          <form onSubmit={submit} noValidate>
-            <fieldset disabled={busy || loadingSession} className="form-fields"><legend className="sr-only">{stepNames[step]}</legend>
-            {step === 0 && <div className="fields-grid">
-              <Field label="Nome completo" id="name" error={errors.name} wide><input {...input('name', { autoComplete: 'name', maxLength: 120 })} /></Field>
-              <Field label="CPF" id="cpf" error={errors.cpf}><input {...input('cpf', { inputMode: 'numeric', placeholder: '000.000.000-00', maxLength: 14, onChange: (e: React.ChangeEvent<HTMLInputElement>) => update('cpf', maskCpf(e.target.value)) })} /></Field>
-              <Field label="Data de nascimento" id="birthDate" error={errors.birthDate} hint="É preciso ter 16 anos ou mais."><input {...input('birthDate', { type: 'date', autoComplete: 'bday', min: '1900-01-01', max: new Date().toISOString().slice(0, 10) })} /></Field>
-              <Field label="Celular" id="phone" error={errors.phone}><input {...input('phone', { type: 'tel', autoComplete: 'tel-national', placeholder: '(82) 90000-0000', onChange: (e: React.ChangeEvent<HTMLInputElement>) => update('phone', maskPhone(e.target.value)) })} /></Field>
-              <Field label="CEP" id="postalCode" error={errors.postalCode}><input {...input('postalCode', { inputMode: 'numeric', autoComplete: 'postal-code', placeholder: '00000-000', onBlur: lookupPostal, onChange: (e: React.ChangeEvent<HTMLInputElement>) => update('postalCode', maskPostal(e.target.value)) })} /></Field>
-              {postalStatus && <p className="postal-status wide" role="status"><MapPin size={14} />{postalStatus}</p>}
-              <Field label="Estado" id="state" error={errors.state}><select id="state" value={values.state} onChange={e => { update('state', e.target.value); update('city', ''); }} aria-invalid={!!errors.state} aria-describedby="state-help"><option value="">Selecione</option>{states.map(s => <option key={s}>{s}</option>)}</select></Field>
-              <Field label="Cidade" id="city" error={errors.city}><input {...input('city', { list: 'city-options', autoComplete: 'address-level2', maxLength: 100 })} /><datalist id="city-options">{cities.map(c => <option key={c} value={c} />)}</datalist></Field>
-            </div>}
-            {step === 1 && <div className="fields-grid">
-              <Field label="Seu e-mail" id="email" error={errors.email} wide hint="Use um endereço fictício: este protótipo não envia e-mails."><input {...input('email', { type: 'email', autoComplete: 'email', placeholder: 'voce@exemplo.com', maxLength: 200 })} /></Field>
-              <Field label="Crie uma senha" id="password" error={errors.password} wide><div className="password-wrap"><input {...input('password', { type: showPassword ? 'text' : 'password', autoComplete: 'new-password', maxLength: 32 })} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field>
-              <ul className="password-rules wide" aria-label="Requisitos da senha">{['8 a 32 caracteres', 'Uma letra maiúscula', 'Um número'].map((text, i) => <li key={text} className={passwordRules[i] ? 'valid' : ''}><span aria-hidden="true">{passwordRules[i] && <Check size={11} strokeWidth={3} />}</span>{text}<i className="sr-only">{passwordRules[i] ? ': atendido' : ': pendente'}</i></li>)}</ul>
-              <Field label="Confirme a senha" id="confirmPassword" error={errors.confirmPassword} wide><input {...input('confirmPassword', { type: showPassword ? 'text' : 'password', autoComplete: 'new-password', maxLength: 32 })} /></Field>
-              <div className="wide"><label className="checkbox"><input id="demoConsent" type="checkbox" checked={values.demoConsent} onChange={e => update('demoConsent', e.target.checked)} aria-describedby="demoConsent-help" /><span>Entendo que este é um ambiente de demonstração e vou usar dados fictícios e uma senha exclusiva para teste.</span></label>{errors.demoConsent && <span className="field-error" id="demoConsent-help"><CircleAlert size={14} />{errors.demoConsent}</span>}</div>
-              {config?.siteKey && <div className="wide"><BotCheck siteKey={config.siteKey} onToken={setToken} reset={botReset} /></div>}
-            </div>}
-            {step === 2 && <div>
-              <div className="otp-field"><Field label={`Código enviado para ${account?.email ?? 'seu e-mail'}`} id="code" error={errors.code}><input id="code" className="otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="······" value={code} onChange={e => { setCode(digits(e.target.value).slice(0, 6)); setErrors({}); }} aria-invalid={!!errors.code} aria-describedby="code-help" /></Field></div>
-              <div className="verify-meta"><span><Clock3 size={15} />Expira em 10 minutos</span>
-                <button type="button" className="link-button" onClick={resend} disabled={seconds > 0 || busy}><RotateCcw size={14} />{seconds ? `Reenviar em ${seconds}s` : 'Reenviar código'}</button></div>
-              <button className="inbox-button" type="button" onClick={openInbox} aria-label="Abrir caixa de demonstração"><Mail size={20} /><span><strong>Abrir caixa de demonstração</strong><small>Mostra a mensagem simulada com o código</small></span><ArrowRight size={18} /></button>
-            </div>}
-            {step === 3 && <>
-              <div className="fields-grid">
-                <Field label="Renda mensal estimada" id="income" error={errors.income}><div className="money-input"><span>R$</span><input id="income" inputMode="decimal" placeholder="0,00" value={income} onChange={e => { setIncome(e.target.value); setErrors(v => ({ ...v, income: '' })); }} aria-invalid={!!errors.income} aria-describedby="income-help" /></div></Field>
-                <Field label="Gastos fixos estimados" id="fixedExpenses" error={errors.fixedExpenses} hint="Aluguel, contas, mensalidades."><div className="money-input"><span>R$</span><input id="fixedExpenses" inputMode="decimal" placeholder="0,00" value={expenses} onChange={e => { setExpenses(e.target.value); setErrors(v => ({ ...v, fixedExpenses: '' })); }} aria-invalid={!!errors.fixedExpenses} aria-describedby="fixedExpenses-help" /></div></Field>
-              </div>
-              <fieldset className="goals"><legend>Qual é seu principal objetivo agora?</legend><div className="goal-options">{goals.map((g, i) => { const Icon = goalIcons[i]; return <label key={g.id} className={`goal-card ${goal === g.id ? 'selected' : ''}`}><input type="radio" name="goal" id={i === 0 ? 'goal' : undefined} value={g.id} checked={goal === g.id} onChange={() => { setGoal(g.id); setErrors(v => ({ ...v, goal: '' })); }} /><Icon size={20} aria-hidden="true" /><strong>{g.title}</strong><small>{g.description}</small></label>; })}</div>
-                {errors.goal && <span className="field-error goal-error"><CircleAlert size={14} />Escolha um objetivo para continuar.</span>}</fieldset>
+        </header>
+        <main id="main" className={view === 'deactivated' ? 'state-page' : 'auth'}>
+          <AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
+            {view === 'register' && <>
+              {!editing && <div className="progress"><p className="progress-label" aria-hidden="true">Etapa {step + 1} de 4 · <strong>{stepNames[step]}</strong></p>
+                <ol aria-label="Etapas do cadastro">{stepNames.map((label, i) => <li key={label} className={i < step ? 'complete' : i === step ? 'current' : ''} aria-current={i === step ? 'step' : undefined}><span>{label}<span className="sr-only">{i < step ? ' (concluída)' : ''}</span></span></li>)}</ol></div>}
+              <div className="page-heading"><h1 tabIndex={-1} ref={heading}>{titles[step]}</h1><p>{descriptions[step]}</p></div>
+              {errorAlert}{noticeAlert}
+              <form onSubmit={submit} noValidate>
+                <fieldset disabled={busy || loadingSession} className="form-fields"><legend className="sr-only">{stepNames[step]}</legend>
+                {step === 0 && <div className="fields-grid">
+                  <Field label="Nome completo" id="name" error={errors.name} wide><input {...input('name', { autoComplete: 'name', maxLength: 120 })} /></Field>
+                  <Field label="CPF" id="cpf" error={errors.cpf}><input {...input('cpf', { inputMode: 'numeric', placeholder: '000.000.000-00', maxLength: 14, onChange: (e: React.ChangeEvent<HTMLInputElement>) => update('cpf', maskCpf(e.target.value)) })} /></Field>
+                  <Field label="Data de nascimento" id="birthDate" error={errors.birthDate} hint="É preciso ter 16 anos ou mais."><input {...input('birthDate', { type: 'date', autoComplete: 'bday', min: '1900-01-01', max: new Date().toISOString().slice(0, 10) })} /></Field>
+                  <Field label="Celular" id="phone" error={errors.phone}><input {...input('phone', { type: 'tel', autoComplete: 'tel-national', placeholder: '(82) 90000-0000', onChange: (e: React.ChangeEvent<HTMLInputElement>) => update('phone', maskPhone(e.target.value)) })} /></Field>
+                  <Field label="CEP" id="postalCode" error={errors.postalCode}><input {...input('postalCode', { inputMode: 'numeric', autoComplete: 'postal-code', placeholder: '00000-000', onBlur: lookupPostal, onChange: (e: React.ChangeEvent<HTMLInputElement>) => update('postalCode', maskPostal(e.target.value)) })} /></Field>
+                  {postalStatus && <p className="postal-status wide" role="status"><MapPin size={14} />{postalStatus}</p>}
+                  <Field label="Estado" id="state" error={errors.state}><select id="state" value={values.state} onChange={e => { update('state', e.target.value); update('city', ''); }} aria-invalid={!!errors.state} aria-describedby="state-help"><option value="">Selecione</option>{states.map(s => <option key={s}>{s}</option>)}</select></Field>
+                  <Field label="Cidade" id="city" error={errors.city}><input {...input('city', { list: 'city-options', autoComplete: 'address-level2', maxLength: 100 })} /><datalist id="city-options">{cities.map(c => <option key={c} value={c} />)}</datalist></Field>
+                </div>}
+                {step === 1 && <div className="fields-grid">
+                  <Field label="Seu e-mail" id="email" error={errors.email} wide hint="Use um endereço fictício: este protótipo não envia e-mails."><input {...input('email', { type: 'email', autoComplete: 'email', placeholder: 'voce@exemplo.com', maxLength: 200 })} /></Field>
+                  <Field label="Crie uma senha" id="password" error={errors.password} wide><div className="password-wrap"><input {...input('password', { type: showPassword ? 'text' : 'password', autoComplete: 'new-password', maxLength: 32 })} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field>
+                  <ul className="password-rules wide" aria-label="Requisitos da senha">{['8 a 32 caracteres', 'Uma letra maiúscula', 'Um número'].map((text, i) => <li key={text} className={passwordRules[i] ? 'valid' : ''}><span aria-hidden="true">{passwordRules[i] && <Check size={11} strokeWidth={3} />}</span>{text}<i className="sr-only">{passwordRules[i] ? ': atendido' : ': pendente'}</i></li>)}</ul>
+                  <Field label="Confirme a senha" id="confirmPassword" error={errors.confirmPassword} wide><input {...input('confirmPassword', { type: showPassword ? 'text' : 'password', autoComplete: 'new-password', maxLength: 32 })} /></Field>
+                  <div className="wide"><label className="checkbox"><input id="demoConsent" type="checkbox" checked={values.demoConsent} onChange={e => update('demoConsent', e.target.checked)} aria-describedby="demoConsent-help" /><span>Entendo que este é um ambiente de demonstração e vou usar dados fictícios e uma senha exclusiva para teste.</span></label>{errors.demoConsent && <span className="field-error" id="demoConsent-help"><CircleAlert size={14} />{errors.demoConsent}</span>}</div>
+                  {config?.siteKey && <div className="wide"><BotCheck siteKey={config.siteKey} onToken={setToken} reset={botReset} /></div>}
+                </div>}
+                {step === 2 && <div>
+                  <div className="otp-field"><Field label={`Código enviado para ${account?.email ?? 'seu e-mail'}`} id="code" error={errors.code}><input id="code" className="otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="······" value={code} onChange={e => { setCode(digits(e.target.value).slice(0, 6)); setErrors({}); }} aria-invalid={!!errors.code} aria-describedby="code-help" /></Field></div>
+                  <div className="verify-meta"><span><Clock3 size={15} />Expira em 10 minutos</span>
+                    <button type="button" className="link-button" onClick={resend} disabled={seconds > 0 || busy}><RotateCcw size={14} />{seconds ? `Reenviar em ${seconds}s` : 'Reenviar código'}</button></div>
+                  <button className="inbox-button" type="button" onClick={openInbox} aria-label="Abrir caixa de demonstração"><Mail size={20} /><span><strong>Abrir caixa de demonstração</strong><small>Mostra a mensagem simulada com o código</small></span><ArrowRight size={18} /></button>
+                </div>}
+                {step === 3 && <>
+                  <div className="fields-grid">
+                    <Field label="Renda mensal estimada" id="income" error={errors.income}><div className="money-input"><span>R$</span><input id="income" inputMode="decimal" placeholder="0,00" value={income} onChange={e => { setIncome(e.target.value); setErrors(v => ({ ...v, income: '' })); }} aria-invalid={!!errors.income} aria-describedby="income-help" /></div></Field>
+                    <Field label="Gastos fixos estimados" id="fixedExpenses" error={errors.fixedExpenses} hint="Aluguel, contas, mensalidades."><div className="money-input"><span>R$</span><input id="fixedExpenses" inputMode="decimal" placeholder="0,00" value={expenses} onChange={e => { setExpenses(e.target.value); setErrors(v => ({ ...v, fixedExpenses: '' })); }} aria-invalid={!!errors.fixedExpenses} aria-describedby="fixedExpenses-help" /></div></Field>
+                  </div>
+                  <fieldset className="goals"><legend>Qual é seu principal objetivo agora?</legend><div className="goal-options">{goals.map((g, i) => { const Icon = goalIcons[i]; return <label key={g.id} className={`goal-card ${goal === g.id ? 'selected' : ''}`}><input type="radio" name="goal" id={i === 0 ? 'goal' : undefined} value={g.id} checked={goal === g.id} onChange={() => { setGoal(g.id); setErrors(v => ({ ...v, goal: '' })); }} /><Icon size={20} aria-hidden="true" /><strong>{g.title}</strong><small>{g.description}</small></label>; })}</div>
+                    {errors.goal && <span className="field-error goal-error"><CircleAlert size={14} />Escolha um objetivo para continuar.</span>}</fieldset>
+                </>}
+                </fieldset>
+                <div className="form-actions">{(step === 1 || editing) && <button type="button" className="button button-ghost" disabled={busy} onClick={() => { if (account?.completed) setView('dashboard'); else setStep(0); setError(''); }}><ArrowLeft size={18} />Voltar</button>}
+                  <button className="button button-primary" type="submit" disabled={busy || loadingSession || (step === 1 && !!config?.siteKey && !token) || (step === 1 && !config)}>{busy || loadingSession ? <><LoaderCircle className="spin" size={18} />{loadingSession ? 'Carregando…' : 'Um instante…'}</> : <>{step === 0 ? 'Continuar' : step === 1 ? 'Criar minha conta' : step === 2 ? 'Confirmar código' : editing ? 'Salvar alterações' : 'Concluir cadastro'}<ArrowRight size={18} /></>}</button></div>
+              </form>
+              {step === 2 && <div className="note"><Info size={16} /><span>A confirmação é simulada e não comprova que o e-mail pertence a você.</span></div>}
+              {step === 3 && <div className="note"><Info size={16} /><span>Estas estimativas não criam lançamentos nem limites de gastos.</span></div>}
+              {step === 0 && <p className="form-switch">Já tem conta? <button type="button" className="link-button" onClick={() => switchView('login')}>Entrar</button></p>}
             </>}
-            </fieldset>
-            <div className="form-actions">{(step === 1 || editing) && <button type="button" className="button button-ghost" disabled={busy} onClick={() => { if (account?.completed) setView('dashboard'); else setStep(0); setError(''); }}><ArrowLeft size={18} />Voltar</button>}
-              <button className="button button-primary" type="submit" disabled={busy || loadingSession || (step === 1 && !!config?.siteKey && !token) || (step === 1 && !config)}>{busy || loadingSession ? <><LoaderCircle className="spin" size={18} />{loadingSession ? 'Carregando…' : 'Um instante…'}</> : <>{step === 0 ? 'Continuar' : step === 1 ? 'Criar minha conta' : step === 2 ? 'Confirmar código' : editing ? 'Salvar alterações' : 'Concluir cadastro'}<ArrowRight size={18} /></>}</button></div>
-          </form>
-          {step === 2 && <div className="note"><Info size={16} /><span>A confirmação é simulada e não comprova que o e-mail pertence a você.</span></div>}
-          {step === 3 && <div className="note"><Info size={16} /><span>Estas estimativas não criam lançamentos nem limites de gastos.</span></div>}
-          {step === 0 && <p className="form-switch">Já tem conta? <button type="button" className="link-button" onClick={() => switchView('login')}>Entrar</button></p>}
-        </>}
-        {view === 'login' && <>
-          <div className="page-heading"><h1 ref={heading} tabIndex={-1}>Entrar no ValorAI</h1><p>Acesse sua conta de demonstração com CPF ou e-mail.</p></div>
-          {errorAlert}
-          <form onSubmit={login}><div className="fields-grid">
-            <Field label="CPF ou e-mail" id="identifier" wide><input id="identifier" autoComplete="username" required disabled={busy || loadingSession} value={identifier} onChange={e => setIdentifier(e.target.value)} /></Field>
-            <Field label="Senha" id="loginPassword" wide><div className="password-wrap"><input id="loginPassword" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required disabled={busy || loadingSession} maxLength={32} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field></div>
-            {config?.siteKey && <div className="login-bot"><BotCheck siteKey={config.siteKey} onToken={setToken} reset={botReset} /></div>}
-            <div className="form-actions"><button className="button button-primary" disabled={busy || loadingSession || !config || (!!config.siteKey && !token)}>{busy || loadingSession ? <><LoaderCircle className="spin" size={18} />{loadingSession ? 'Carregando…' : 'Entrando…'}</> : <>Entrar na minha conta<ArrowRight size={18} /></>}</button></div>
-          </form>
-          <p className="form-switch">Primeira vez aqui? <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('register')}>Criar minha conta</button></p>
-          <div className="note"><Info size={16} /><span>A recuperação de senha ainda não faz parte deste protótipo.</span></div>
-        </>}
-        {view === 'dashboard' && account && (
-          <DashboardWorkspace
-            account={account}
-            dashboard={dashboard}
-            profile={profile}
-            lessons={lessons}
-            activeTab={dashTab}
-            onSelectTab={setDashTab}
-            onEditFinanceProfile={() => { setStep(3); setView('register'); }}
-            onOpenDeactivate={() => { setDeactivateError(''); setModal('deactivate'); }}
-            onOpenLesson={(item) => setLesson(item)}
-            onRefreshDashboard={(nextDashboard, nextAccount, nextProfile) => {
-              setDashboard(nextDashboard);
-              if (nextDashboard.lessons?.length) setLessons(nextDashboard.lessons);
-              if (nextAccount) setAccount(nextAccount);
-              if (nextProfile) setProfile(nextProfile);
-            }}
-            apiCall={api}
-            headingRef={heading}
-            errorAlert={errorAlert}
-            noticeAlert={noticeAlert}
-            setNotice={setNotice}
-            setError={setError}
-          />
-        )}
-        {view === 'deactivated' && <><div className="page-heading"><h1 ref={heading} tabIndex={-1}>Conta desativada</h1><p>Suas sessões foram encerradas. O cadastro e o perfil financeiro foram preservados (exclusão lógica).</p><p>Reativação e exclusão definitiva ainda não estão disponíveis.</p></div>
-          <button className="button button-primary button-block" onClick={() => { setView('login'); setStep(0); setValues(initial); }}>Voltar ao início<ArrowRight size={18} /></button></>}
-      </motion.div></AnimatePresence>
-      {(view === 'login' || view === 'register') && <ProductPreview />}
-      <div className="sr-only" aria-live="polite">{view === 'register' ? `Etapa ${step + 1} de 4: ${stepNames[step]}` : ''}</div>
-    </main>
-    <footer className="site-footer"><div><span>Uma iniciativa</span><img src={companyLogo} alt="Nulfinance Inc." width="84" height="28" /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
+            {view === 'login' && <>
+              <div className="page-heading"><h1 ref={heading} tabIndex={-1}>Entrar no ValorAI</h1><p>Acesse sua conta de demonstração com CPF ou e-mail.</p></div>
+              {errorAlert}
+              <form onSubmit={login}><div className="fields-grid">
+                <Field label="CPF ou e-mail" id="identifier" wide><input id="identifier" autoComplete="username" required disabled={busy || loadingSession} value={identifier} onChange={e => setIdentifier(e.target.value)} /></Field>
+                <Field label="Senha" id="loginPassword" wide><div className="password-wrap"><input id="loginPassword" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required disabled={busy || loadingSession} maxLength={32} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field></div>
+                {config?.siteKey && <div className="login-bot"><BotCheck siteKey={config.siteKey} onToken={setToken} reset={botReset} /></div>}
+                <div className="form-actions"><button className="button button-primary" disabled={busy || loadingSession || !config || (!!config.siteKey && !token)}>{busy || loadingSession ? <><LoaderCircle className="spin" size={18} />{loadingSession ? 'Carregando…' : 'Entrando…'}</> : <>Entrar na minha conta<ArrowRight size={18} /></>}</button></div>
+              </form>
+              <p className="form-switch">Primeira vez aqui? <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('register')}>Criar minha conta</button></p>
+              <div className="note"><Info size={16} /><span>A recuperação de senha ainda não faz parte deste protótipo.</span></div>
+            </>}
+            {view === 'deactivated' && <><div className="page-heading"><h1 ref={heading} tabIndex={-1}>Conta desativada</h1><p>Suas sessões foram encerradas. O cadastro e o perfil financeiro foram preservados (exclusão lógica).</p><p>Reativação e exclusão definitiva ainda não estão disponíveis.</p></div>
+              <button className="button button-primary button-block" onClick={() => { setView('login'); setStep(0); setValues(initial); }}>Voltar ao início<ArrowRight size={18} /></button></>}
+          </motion.div></AnimatePresence>
+          {(view === 'login' || view === 'register') && <ProductPreview />}
+          <div className="sr-only" aria-live="polite">{view === 'register' ? `Etapa ${step + 1} de 4: ${stepNames[step]}` : ''}</div>
+        </main>
+        <footer className="site-footer"><div><span>Uma iniciativa</span><img src={companyLogo} alt="Nulfinance Inc." width="84" height="28" /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
+      </>
+    )}
     {modal === 'about' && <Modal title="Sobre este protótipo" onClose={() => setModal(null)}><div className="modal-body">
       <p>Este ambiente demonstra o cadastro (RF001), a confirmação simulada (RF002), a manutenção do perfil cadastral (RF003), o perfil financeiro (RF004), os 3 canais de lançamentos, importação, leitura de comprovantes por IA, limites e metas.</p>
       <div className="note"><Info size={16} /><span>Use dados fictícios e uma senha exclusiva para teste. Os dados ficam na Cloudflare. Não há envio de e-mail nem verificação real de titularidade.</span></div>

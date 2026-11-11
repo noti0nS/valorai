@@ -1,16 +1,21 @@
-import { useState, useRef, type SyntheticEvent, type ReactNode } from 'react';
+import { useState, useRef, useEffect, useId, type SyntheticEvent, type ReactNode } from 'react';
 import NumberFlow from '@number-flow/react';
 import {
   Plus, PenLine, Camera, FileUp, ShoppingCart, Home, Car, BookOpen,
   Utensils, HeartPulse, Zap, ArrowDownLeft, PiggyBank, Tags, TrendingUp, Clock3,
   BellRing, ArrowRight, Trash2, Lightbulb, Sparkles,
-  Search, CircleAlert, X, CreditCard,
-  Wallet, Target
+  Search, CircleAlert, X, Target,
+  LayoutGrid, ReceiptText, ScanLine, ChevronDown, UserRound,
+  SlidersHorizontal, Info, LogOut, UserX, BadgeCheck, Check
 } from 'lucide-react';
+import productLogo from '../../assets/ValorAI.svg?url';
+import companyLogo from '../../assets/Nulfinance_Inc.svg?url';
 import {
   goals, standardCategories, transactionKinds, paymentMethods, suggestCategory,
   states, maskPhone, maskPostal, profileUpdateSchema, fieldErrors, type Finance
 } from '../../shared/validation';
+
+export type DashboardTab = 'overview' | 'transactions' | 'planning' | 'guides';
 
 export type DashboardTransaction = {
   id: string;
@@ -319,6 +324,82 @@ export function LightDismissModal({ title, children, onClose }: { title: string;
   );
 }
 
+export function Dropdown({
+  className,
+  triggerClassName,
+  triggerLabel,
+  triggerContent,
+  panelLabel,
+  panelClassName,
+  children,
+}: {
+  className?: string;
+  triggerClassName: string;
+  triggerLabel?: string;
+  triggerContent: ReactNode;
+  panelLabel: string;
+  panelClassName?: string;
+  children: (run: (action: () => void) => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  const run = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div ref={wrapRef} className={`dropdown-wrap ${className ?? ''}`}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={triggerClassName}
+        aria-label={triggerLabel}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {triggerContent}
+      </button>
+      {open && (
+        <div
+          id={panelId}
+          role="group"
+          aria-label={panelLabel}
+          className={`dropdown-panel ${panelClassName ?? ''}`}
+        >
+          {children(run)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardWorkspace({
   account,
   dashboard,
@@ -328,6 +409,9 @@ export default function DashboardWorkspace({
   onSelectTab,
   onEditFinanceProfile,
   onOpenDeactivate,
+  onOpenAbout,
+  onLogout,
+  sessionBusy,
   onOpenLesson,
   onRefreshDashboard,
   apiCall,
@@ -341,10 +425,13 @@ export default function DashboardWorkspace({
   dashboard: DashboardData | null;
   profile: ProfileData | null;
   lessons: DashboardLesson[];
-  activeTab: 'overview' | 'transactions' | 'planning' | 'guides';
-  onSelectTab: (tab: 'overview' | 'transactions' | 'planning' | 'guides') => void;
+  activeTab: DashboardTab;
+  onSelectTab: (tab: DashboardTab) => void;
   onEditFinanceProfile: () => void;
   onOpenDeactivate: () => void;
+  onOpenAbout: () => void;
+  onLogout: () => void;
+  sessionBusy?: boolean;
   onOpenLesson: (lesson: DashboardLesson) => void;
   onRefreshDashboard: (nextDashboard: DashboardData, nextAccount?: AccountSummary, nextProfile?: ProfileData) => void;
   apiCall: <T>(path: string, body?: unknown) => Promise<T>;
@@ -424,7 +511,6 @@ export default function DashboardWorkspace({
   const baseFixed = account.finance?.fixedExpenses ?? 0;
   const effectiveIncome = dashboard?.summary.effectiveIncome ?? baseIncome;
   const effectiveFixed = dashboard?.summary.effectiveFixed ?? baseFixed;
-  const variableExpenses = dashboard?.summary.variableExpenses ?? 0;
   const freeBalance = dashboard?.summary.freeBalance ?? (baseIncome - baseFixed);
   const fixedShare = dashboard?.summary.fixedShare ?? (baseIncome > 0 ? Math.min(100, Math.round((baseFixed / baseIncome) * 100)) : baseFixed > 0 ? 100 : 0);
   const variableShare = dashboard?.summary.variableShare ?? 0;
@@ -848,984 +934,893 @@ export default function DashboardWorkspace({
   }
 
   const firstName = account.name.split(' ')[0] || 'Cliente';
+  const displayName = account.name.split(' ').filter(Boolean).slice(0, 2).join(' ') || 'Cliente';
+  const initials = account.name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'VA';
+  const avatarSrc = profile?.avatar || account.avatar || null;
+  const cycleLabel = dashboard?.cycle.label ?? 'Novembro de 2026';
+  const cycleCode = dashboard?.cycle.code ?? '2026.11';
+  const goalTitle = goals.find((g) => g.id === account.finance?.goal)?.title;
+  const recentTransactions = filteredTransactions.slice(0, 5);
+  const tabMeta: Record<DashboardTab, { title: string; subtitle: string }> = {
+    overview: {
+      title: 'Visão Geral',
+      subtitle: transactions.length
+        ? `${transactions.length} ${transactions.length === 1 ? 'movimentação registrada' : 'movimentações registradas'}`
+        : 'Nenhuma movimentação registrada',
+    },
+    transactions: { title: 'Transações & Extratos', subtitle: 'Receitas, gastos fixos e despesas do ciclo' },
+    planning: { title: 'Planejamento', subtitle: 'Limites de gastos e meta prioritária' },
+    guides: { title: 'Guias', subtitle: 'Leituras curtas de educação financeira' },
+  };
+  const navItems: Array<{ id: DashboardTab; label: string; short: string; Icon: typeof LayoutGrid }> = [
+    { id: 'overview', label: 'Visão Geral', short: 'Visão Geral', Icon: LayoutGrid },
+    { id: 'transactions', label: 'Transações & Extratos', short: 'Transações', Icon: ReceiptText },
+    { id: 'planning', label: 'Planejamento', short: 'Metas', Icon: Target },
+    { id: 'guides', label: 'Guias', short: 'Guias', Icon: BookOpen },
+  ];
+
+  // Move focus to the page heading when the client changes section, like a page navigation.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      headingRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    window.scrollTo({ top: 0 });
+    headingRef.current?.focus({ preventScroll: true });
+  }, [activeTab, headingRef]);
+
+  const entryOptions = (run: (action: () => void) => void) => (
+    <>
+      <button type="button" className="dropdown-item" onClick={() => run(() => openManualModal())}>
+        <PenLine size={18} aria-hidden="true" />
+        <span>Digitação manual</span>
+      </button>
+      <button type="button" className="dropdown-item" onClick={() => run(openReceiptModal)}>
+        <ScanLine size={18} aria-hidden="true" />
+        <span>Ler comprovante (OCR)</span>
+      </button>
+      <button type="button" className="dropdown-item" onClick={() => run(openImportModal)}>
+        <FileUp size={18} aria-hidden="true" />
+        <span>Importar OFX / CSV</span>
+      </button>
+    </>
+  );
+
+  const avatar = (size: 'sm' | 'lg') => (
+    <span className={`user-avatar ${size === 'lg' ? 'user-avatar-lg' : ''}`} aria-hidden="true">
+      {avatarSrc ? <img src={avatarSrc} alt="" /> : initials}
+    </span>
+  );
 
   return (
-    <div className="stitch-dashboard">
-      {/* Top Greeting & Action Bar */}
-      <div className="dash-topbar">
-        <div className="dash-greeting">
-          <div className="dash-eyebrow-badge">
-            <Sparkles size={14} aria-hidden="true" />
-            <span>VISÃO GERAL • CICLO {dashboard?.cycle.code ?? '2026.11'}</span>
-          </div>
-          <h1 ref={headingRef} tabIndex={-1}>
-            Olá, {firstName}.
-          </h1>
-          <p className="dash-subtitle">
-            Ciclo atual: <strong>{dashboard?.cycle.label ?? 'Novembro de 2026'}</strong> • Planejamento guiado por ritmo e equilíbrio
-          </p>
+    <>
+      {/* ===================== HEADER (Stitch: brand, sections, Novo Lançamento, profile) ===================== */}
+      <header className="dash-header">
+        <div className="dash-header-left">
+          <a className="brand" href="/" aria-label="ValorAI — início">
+            <img src={productLogo} alt="ValorAI" width="108" height="35" />
+          </a>
+          <nav className="header-nav" aria-label="Seções do painel">
+            {navItems.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                className={`header-nav-link ${activeTab === id ? 'active' : ''}`}
+                aria-current={activeTab === id ? 'page' : undefined}
+                onClick={() => onSelectTab(id)}
+              >
+                {label}
+                {id === 'planning' && alerts.length > 0 && (
+                  <span className="tab-alert-dot" role="img" aria-label={`${alerts.length} alerta(s) de limite`} />
+                )}
+              </button>
+            ))}
+          </nav>
         </div>
 
-        <div className="dash-quick-bar">
-          <button
-            type="button"
-            className="button button-secondary button-small"
-            onClick={() => openManualModal()}
+        <div className="dash-header-right">
+          <Dropdown
+            className="new-entry-header"
+            triggerClassName="button button-primary button-small new-entry-trigger"
+            triggerContent={
+              <>
+                <Plus size={18} aria-hidden="true" />
+                <span>Novo Lançamento</span>
+                <ChevronDown size={16} aria-hidden="true" className="dropdown-chevron" />
+              </>
+            }
+            panelLabel="Canais de lançamento"
           >
-            <PenLine size={16} aria-hidden="true" />
-            <span>Digitação manual</span>
-          </button>
-          <button
-            type="button"
-            className="button button-secondary button-small"
-            onClick={openReceiptModal}
+            {entryOptions}
+          </Dropdown>
+          <span className="header-divider" aria-hidden="true" />
+          <Dropdown
+            triggerClassName="profile-trigger"
+            triggerLabel={`Painel do perfil de ${displayName}`}
+            triggerContent={
+              <>
+                {avatar('sm')}
+                <span className="profile-trigger-name">{displayName}</span>
+              </>
+            }
+            panelLabel="Painel do perfil"
+            panelClassName="profile-panel"
           >
-            <Camera size={16} aria-hidden="true" />
-            <span>Ler comprovante (OCR)</span>
-          </button>
-          <button
-            type="button"
-            className="button button-primary button-small"
-            onClick={openImportModal}
-          >
-            <FileUp size={16} aria-hidden="true" />
-            <span>Importar OFX / CSV</span>
-          </button>
-        </div>
-      </div>
-
-      {errorAlert}
-      {noticeAlert}
-
-      {/* Sub-navigation Tabs for Desktop & Tablet */}
-      <div className="dash-view-switcher" role="navigation" aria-label="Seções do painel financeiro">
-        <button
-          type="button"
-          className={`dash-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-          aria-current={activeTab === 'overview' ? 'page' : undefined}
-          onClick={() => onSelectTab('overview')}
-        >
-          Visão Geral
-        </button>
-        <button
-          type="button"
-          className={`dash-tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
-          aria-current={activeTab === 'transactions' ? 'page' : undefined}
-          onClick={() => onSelectTab('transactions')}
-        >
-          Transações &amp; Extratos
-          {transactions.length > 0 && <span className="tab-count">{transactions.length}</span>}
-        </button>
-        <button
-          type="button"
-          className={`dash-tab-btn ${activeTab === 'planning' ? 'active' : ''}`}
-          aria-current={activeTab === 'planning' ? 'page' : undefined}
-          onClick={() => onSelectTab('planning')}
-        >
-          Planejamento &amp; Metas
-          {alerts.length > 0 && <span className="tab-alert-dot" aria-label={`${alerts.length} alerta(s)`} />}
-        </button>
-        <button
-          type="button"
-          className={`dash-tab-btn ${activeTab === 'guides' ? 'active' : ''}`}
-          aria-current={activeTab === 'guides' ? 'page' : undefined}
-          onClick={() => onSelectTab('guides')}
-        >
-          Guias Práticos
-        </button>
-      </div>
-
-      {/* ===================== TAB 1: VISÃO GERAL ===================== */}
-      {activeTab === 'overview' && (
-        <div className="dash-grid">
-          {/* Primary Left Column (8 cols / 1.7fr) */}
-          <div className="dash-col">
-            {/* 1. Hero Balance & Resumo Financeiro Card */}
-            <section className="card hero-card" aria-labelledby="profile-title">
-              <div className="hero-top">
-                <div>
-                  <div className="hero-label-row">
-                    <h2 id="profile-title" className="eyebrow-label">
-                      Saldo Livre Planejável
-                    </h2>
-                    <span className={`status-pill ${dashboard?.summary.statusTone ?? (freeBalance < 0 ? 'over' : 'balanced')}`}>
-                      <i className="status-dot" aria-hidden="true" />
-                      {dashboard?.summary.statusBadge ?? (freeBalance < 0 ? 'Acima do planejado' : 'Equilibrado')}
-                    </span>
-                  </div>
-                  <div className={`hero-balance-value ${freeBalance < 0 ? 'negative' : ''}`}>
-                    <span className="sr-only">{currency(freeBalance)}</span>
-                    <NumberFlow aria-hidden="true" value={freeBalance} locales="pt-BR" format={moneyFormat} />
+            {(run) => (
+              <>
+                <div className="profile-panel-head">
+                  {avatar('lg')}
+                  <div>
+                    <strong>{account.name}</strong>
+                    <small>{account.email}</small>
                   </div>
                 </div>
-                <div className="hero-top-actions">
-                  <p className="hero-caption">
-                    Margem livre calculada para despesas do dia e aportes estratégicos. Não é saldo bancário.
-                  </p>
-                  <button
-                    type="button"
-                    className="button button-secondary button-small"
-                    onClick={onEditFinanceProfile}
-                  >
-                    Ajustar perfil
+                <dl className="profile-facts">
+                  <div>
+                    <dt>Cidade</dt>
+                    <dd>{account.city} · {account.state}</dd>
+                  </div>
+                  {goalTitle && (
+                    <div>
+                      <dt>Objetivo</dt>
+                      <dd>{goalTitle}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt>Confirmação</dt>
+                    <dd>Demonstração</dd>
+                  </div>
+                </dl>
+                <div className="dropdown-group">
+                  <button type="button" className="dropdown-item" onClick={() => run(openProfileModal)}>
+                    <UserRound size={18} aria-hidden="true" />
+                    <span>Editar cadastro</span>
+                  </button>
+                  <button type="button" className="dropdown-item" onClick={() => run(onEditFinanceProfile)}>
+                    <SlidersHorizontal size={18} aria-hidden="true" />
+                    <span>Ajustar perfil financeiro</span>
+                  </button>
+                  <button type="button" className="dropdown-item" onClick={() => run(onOpenAbout)}>
+                    <Info size={18} aria-hidden="true" />
+                    <span>Sobre o protótipo</span>
+                  </button>
+                  <hr className="dropdown-sep" />
+                  <button type="button" className="dropdown-item" disabled={sessionBusy} onClick={() => run(onLogout)}>
+                    <LogOut size={18} aria-hidden="true" />
+                    <span>Sair</span>
+                  </button>
+                  <button type="button" className="dropdown-item danger" onClick={() => run(onOpenDeactivate)}>
+                    <UserX size={18} aria-hidden="true" />
+                    <span>Desativar minha conta</span>
                   </button>
                 </div>
-              </div>
+              </>
+            )}
+          </Dropdown>
+        </div>
+      </header>
 
-              {/* Secondary Metrics Split (Renda Mensal | Gastos Fixos | Variáveis) */}
-              <div className="metrics-split">
-                <div className="metric-cell">
-                  <span className="metric-label">Renda Mensal</span>
-                  <strong className="metric-value">
-                    <span className="sr-only">{currency(effectiveIncome)}</span>
-                    <NumberFlow aria-hidden="true" value={effectiveIncome} locales="pt-BR" format={moneyFormat} />
-                  </strong>
-                  <small className="metric-sub">Recebimentos fixos e extras</small>
+      <main id="main" className="dashboard stitch-dashboard">
+        {/* Compact page heading & cycle status */}
+        <div className="dash-page-head">
+          <div>
+            <h1 ref={headingRef} tabIndex={-1}>{tabMeta[activeTab].title}</h1>
+            <p>
+              Ciclo atual: <strong>{cycleLabel}</strong> • {tabMeta[activeTab].subtitle}
+            </p>
+          </div>
+          {activeTab === 'overview' && (
+            <span className="guided-badge">
+              <BadgeCheck size={16} aria-hidden="true" />
+              Planejamento guiado por ritmo e equilíbrio
+            </span>
+          )}
+          <Dropdown
+            className="page-head-entry"
+            triggerClassName="button button-primary new-entry-trigger"
+            triggerContent={
+              <>
+                <Plus size={18} aria-hidden="true" />
+                <span>Lançamento</span>
+              </>
+            }
+            panelLabel="Canais de lançamento"
+          >
+            {entryOptions}
+          </Dropdown>
+        </div>
+
+        {errorAlert}
+        {noticeAlert}
+
+        {/* ===================== TAB 1: VISÃO GERAL ===================== */}
+        {activeTab === 'overview' && (
+          <div className="dash-grid overview-grid">
+            <div className="dash-col">
+              {/* 1. Saldo livre planejável & resumo financeiro */}
+              <section className="card hero-card" aria-labelledby="profile-title">
+                <div className="hero-top">
+                  <div>
+                    <div className="hero-label-row">
+                      <h2 id="profile-title" className="eyebrow-label">
+                        Saldo Livre Planejável
+                      </h2>
+                      <span className={`status-pill ${dashboard?.summary.statusTone ?? (freeBalance < 0 ? 'over' : 'balanced')}`}>
+                        <i className="status-dot" aria-hidden="true" />
+                        {dashboard?.summary.statusBadge ?? (freeBalance < 0 ? 'Acima do planejado' : 'Equilibrado')}
+                      </span>
+                    </div>
+                    <div className={`hero-balance-value ${freeBalance < 0 ? 'negative' : ''}`}>
+                      <span className="sr-only">{currency(freeBalance)}</span>
+                      <NumberFlow aria-hidden="true" value={freeBalance} locales="pt-BR" format={moneyFormat} />
+                    </div>
+                  </div>
+                  <p className="hero-caption">
+                    Margem livre calculada para despesas do dia e aportes estratégicos.
+                  </p>
                 </div>
-                <div className="metric-cell metric-divider">
-                  <span className="metric-label">Gastos Fixos</span>
-                  <strong className="metric-value">
-                    <span className="sr-only">{currency(effectiveFixed)}</span>
-                    <NumberFlow aria-hidden="true" value={effectiveFixed} locales="pt-BR" format={moneyFormat} />
-                  </strong>
-                  <small className="metric-sub">{fixedShare}% da renda alocada</small>
-                </div>
-                {variableExpenses > 0 && (
-                  <div className="metric-cell metric-divider">
-                    <span className="metric-label">Despesas Variáveis</span>
+
+                <div className="metrics-split">
+                  <div className="metric-cell">
+                    <span className="metric-label">Renda Mensal</span>
                     <strong className="metric-value">
-                      <span className="sr-only">{currency(variableExpenses)}</span>
-                      <NumberFlow aria-hidden="true" value={variableExpenses} locales="pt-BR" format={moneyFormat} />
+                      <span className="sr-only">{currency(effectiveIncome)}</span>
+                      <NumberFlow aria-hidden="true" value={effectiveIncome} locales="pt-BR" format={moneyFormat} />
                     </strong>
-                    <small className="metric-sub">{variableShare}% da renda no ciclo</small>
+                    <small className="metric-sub">Recebimentos fixos e extras</small>
+                  </div>
+                  <div className="metric-cell">
+                    <span className="metric-label">Gastos Fixos</span>
+                    <strong className="metric-value">
+                      <span className="sr-only">{currency(effectiveFixed)}</span>
+                      <NumberFlow aria-hidden="true" value={effectiveFixed} locales="pt-BR" format={moneyFormat} />
+                    </strong>
+                    <small className="metric-sub">{fixedShare}% da renda alocada</small>
+                  </div>
+                </div>
+
+                <div className="distribution-block">
+                  <div className={`distribution-bar ${freeBalance < 0 ? 'over' : ''}`} aria-hidden="true">
+                    <span className="seg-fixed" style={{ width: `${fixedShare}%` }} title={`Fixos (${fixedShare}%)`} />
+                    {variableShare > 0 && (
+                      <span className="seg-variable" style={{ width: `${variableShare}%` }} title={`Variáveis (${variableShare}%)`} />
+                    )}
+                    {reserveShare > 0 && (
+                      <span className="seg-reserve" style={{ width: `${reserveShare}%` }} title={`Reserva (${reserveShare}%)`} />
+                    )}
+                  </div>
+                  <div className="distribution-legend">
+                    <div className="legend-items">
+                      <span><i className="dot-fixed" />{fixedShare}% Fixos</span>
+                      <span><i className="dot-variable" />{variableShare}% Variáveis</span>
+                      <span><i className="dot-reserve" />{reserveShare}% Reserva</span>
+                    </div>
+                    <span className="dist-tag">100% DISTRIBUÍDO</span>
+                  </div>
+                </div>
+
+                <div className="ai-insight">
+                  <div className="ai-insight-icon" aria-hidden="true">
+                    <Lightbulb size={17} />
+                  </div>
+                  <p>
+                    <strong>Previsão:</strong>{' '}
+                    {dashboard?.summary.insight.message ??
+                      `Seus gastos fixos comprometem ${fixedShare}% da renda mensal. Registre seus lançamentos para acompanhar o ritmo diário.`}
+                  </p>
+                </div>
+              </section>
+
+              {/* 2. Últimas movimentações */}
+              <section className="card ledger-card" aria-labelledby="ledger-title">
+                <div className="ledger-card-header">
+                  <div>
+                    <div className="ledger-title-row">
+                      <h2 id="ledger-title">Últimas Movimentações</h2>
+                      <span className="today-badge">Hoje</span>
+                    </div>
+                    <p className="card-sub">Lançamentos recentes organizados por data</p>
+                  </div>
+                  <div className="segment-pills" role="group" aria-label="Filtrar movimentações">
+                    {([
+                      ['all', 'Todas'],
+                      ['fixed', 'Fixas'],
+                      ['variable', 'Variáveis'],
+                    ] as const).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={ledgerFilter === id ? 'active' : ''}
+                        aria-pressed={ledgerFilter === id}
+                        onClick={() => setLedgerFilter(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {recentTransactions.length > 0 ? (
+                  <ul className="tx-list" aria-label="Movimentações recentes">
+                    {recentTransactions.map((tx) => {
+                      const Icon = categoryIcon(tx.category, tx.kind);
+                      const isIncome = tx.kind === 'income';
+                      const kindClass = isIncome ? 'income' : tx.kind === 'fixed_expense' ? 'fixed' : 'variable';
+                      return (
+                        <li key={tx.id} className="tx-row">
+                          <div className="tx-main">
+                            <div className={`tx-icon ${kindClass}`}>
+                              <Icon size={19} aria-hidden="true" />
+                            </div>
+                            <div className="tx-info">
+                              <p className="tx-title">{tx.title}</p>
+                              <p className={`tx-sub ${isIncome ? 'income' : ''}`}>
+                                {tx.category}
+                                {tx.kind === 'fixed_expense' && !tx.category.toLowerCase().includes('fixo') ? ' (Fixo)' : ''}
+                                {tx.status === 'pending' ? ' · A vencer' : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`tx-amount num ${isIncome ? 'positive' : ''}`}>
+                            {isIncome ? '+' : '-'} {currency(tx.amount)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="tx-empty">
+                    <p>
+                      <strong>{transactions.length ? 'Nenhuma movimentação neste filtro.' : 'Nenhuma movimentação registrada neste ciclo.'}</strong>{' '}
+                      Use <strong>Novo Lançamento</strong> para digitar, ler um comprovante ou importar seu extrato.
+                    </p>
+                    {!transactions.length && (
+                      <div className="tx-empty-actions">
+                        <button type="button" className="button button-secondary button-small" onClick={handleSeedDemo} disabled={actionBusy}>
+                          <Sparkles size={16} aria-hidden="true" /> Carregar exemplo do ciclo
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
 
-              {/* Minimalist Distribution Bar */}
-              <div className="distribution-block">
-                <div className={`distribution-bar ${freeBalance < 0 ? 'over' : ''}`} aria-hidden="true">
-                  <span className="seg-fixed" style={{ width: `${fixedShare}%` }} title={`Fixos (${fixedShare}%)`} />
-                  {variableShare > 0 && (
-                    <span className="seg-variable" style={{ width: `${variableShare}%` }} title={`Variáveis (${variableShare}%)`} />
-                  )}
-                  {reserveShare > 0 && (
-                    <span className="seg-reserve" style={{ width: `${reserveShare}%` }} title={`Reserva / Livre (${reserveShare}%)`} />
-                  )}
+                <div className="ledger-card-footer">
+                  <span>
+                    {recentTransactions.length} de {transactions.length} movimentações
+                  </span>
+                  <button type="button" className="text-link" onClick={() => onSelectTab('transactions')}>
+                    <span>Ver extrato completo</span>
+                    <ArrowRight size={16} aria-hidden="true" />
+                  </button>
                 </div>
-                <div className="distribution-legend">
-                  <div className="legend-items">
-                    <span><i className="dot-fixed" />{fixedShare}% Fixos</span>
-                    <span><i className="dot-variable" />{variableShare}% Variáveis</span>
-                    <span><i className="dot-reserve" />{reserveShare}% Reserva</span>
+              </section>
+            </div>
+
+            <div className="dash-col">
+              {/* 3. Ritmo diário de despesas */}
+              <section className="card side-card sparkline-card" aria-labelledby="sparkline-title">
+                <div className="sparkline-head">
+                  <div className="sparkline-title-wrap">
+                    <TrendingUp size={18} aria-hidden="true" />
+                    <h2 id="sparkline-title">Ritmo Diário de Despesas</h2>
                   </div>
-                  <span className="dist-tag">100% DISTRIBUÍDO</span>
+                  <span className="avg-pill num">Média: {currency(dailyAverage)}/dia</span>
                 </div>
-              </div>
+                <div className="sparkline-Wrap">
+                  <svg className="sparkline-svg" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="valoraiSparkGrad" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#3c6a53" stopOpacity="0.18" />
+                        <stop offset="100%" stopColor="#3c6a53" stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
+                    <path d={sparkline.area} fill="url(#valoraiSparkGrad)" />
+                    <path
+                      d={sparkline.line}
+                      fill="none"
+                      stroke="#3c6a53"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle cx={sparkline.last.x} cy={sparkline.last.y} r="3.5" fill="#3c6a53" />
+                  </svg>
+                  <div className="sparkline-axis">
+                    <span>DIA 01</span>
+                    <span>DIA 10</span>
+                    <span>DIA 20</span>
+                    <span>HOJE</span>
+                  </div>
+                </div>
+              </section>
 
-              {/* AI Insight Callout */}
-              <div className="ai-insight">
-                <div className="ai-insight-icon" aria-hidden="true">
-                  <Lightbulb size={17} />
+              {/* 4. Objetivo em foco */}
+              <section className="card side-card goal-focus-card" aria-labelledby="goal-focus-title">
+                <div className="goal-focus-head">
+                  <div className="goal-focus-Identity">
+                    <div className="goal-focus-icon">
+                      <PiggyBank size={18} aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h2 id="goal-focus-title">{activeGoal.title}</h2>
+                      <span className="goal-focus-sub">Meta Prioritária</span>
+                    </div>
+                  </div>
+                  <span className={`status-pill ${activeGoal.monthsRemaining === 0 ? 'balanced' : 'balanced'}`}>
+                    <i className="status-dot" aria-hidden="true" />
+                    {activeGoal.monthsRemaining === 0 ? 'Concluída' : 'Em dia'}
+                  </span>
                 </div>
-                <p>
-                  <strong>Previsão:</strong>{' '}
-                  {dashboard?.summary.insight.message ??
-                    `Seus gastos fixos comprometem ${fixedShare}% da renda mensal. Registre seus lançamentos para acompanhar o ritmo diário.`}
+
+                <div className="goal-progress-block">
+                  <div className="goal-progress-numbers">
+                    <span className="num">
+                      <strong>{currency(activeGoal.current)}</strong>{' '}
+                      <small>/ {currency(activeGoal.target)}</small>
+                    </span>
+                    <span className="goal-pct num">{activeGoal.percent}% acumulado</span>
+                  </div>
+                  <progress
+                    className="styled-progress"
+                    max={100}
+                    value={activeGoal.percent}
+                    aria-label={`Progresso da meta ${activeGoal.title}`}
+                  />
+                </div>
+
+                <div className="goal-schedule-note">
+                  <Clock3 size={16} aria-hidden="true" />
+                  <p>
+                    {activeGoal.monthsRemaining === 0 ? (
+                      <strong>Meta concluída! Parabéns pela disciplina financeira.</strong>
+                    ) : (
+                      <>
+                        No ritmo planejado ({currency(activeGoal.monthly)}/mês), sua meta estará completa em{' '}
+                        <strong>{activeGoal.monthsRemaining} {activeGoal.monthsRemaining === 1 ? 'mês' : 'meses'}</strong>.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </section>
+
+              {/* 5. Alerta informativo de limite */}
+              <section className="card side-card limit-alert-card" aria-labelledby="limit-card-title">
+                {primaryLimit ? (
+                  <>
+                    <div className="limit-card-head">
+                      <div className="limit-card-title-group">
+                        <div className={`limit-icon-tile ${primaryLimit.status === 'ok' ? 'ok' : 'alert'}`}>
+                          <ReceiptText size={17} aria-hidden="true" />
+                        </div>
+                        <h2 id="limit-card-title">{primaryLimit.category}</h2>
+                      </div>
+                      <span className={`limit-pct-badge num ${primaryLimit.status}`}>
+                        {primaryLimit.percent}%
+                      </span>
+                    </div>
+                    <div className="limit-progress-wrap">
+                      <progress
+                        className={`styled-progress slim ${primaryLimit.status !== 'ok' ? 'terracotta' : ''}`}
+                        max={100}
+                        value={Math.min(100, primaryLimit.percent)}
+                        aria-label={`Consumo do limite ${primaryLimit.category}`}
+                      />
+                      <div className="limit-numbers num">
+                        <span>
+                          {primaryLimit.scope === 'card_share'
+                            ? `${primaryLimit.spent}% consumidos`
+                            : `${currency(primaryLimit.spent)} gastos`}
+                        </span>
+                        <span>
+                          Teto estimado:{' '}
+                          {primaryLimit.scope === 'card_share'
+                            ? `${primaryLimit.limit}%`
+                            : currency(primaryLimit.limit)}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="limit-advisory">{primaryLimit.advisory}</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="limit-card-head">
+                      <div className="limit-card-title-group">
+                        <div className="limit-icon-tile ok">
+                          <BellRing size={17} aria-hidden="true" />
+                        </div>
+                        <h2 id="limit-card-title">Limites &amp; Alertas</h2>
+                      </div>
+                    </div>
+                    <p className="limit-advisory">
+                      Nenhum teto definido. O alerta avisa ao atingir o limite, sem bloquear gastos.
+                    </p>
+                    <button type="button" className="text-link limit-setup-link" onClick={() => openLimitModal()}>
+                      <span>Configurar teto de gastos</span>
+                      <ArrowRight size={16} aria-hidden="true" />
+                    </button>
+                  </>
+                )}
+              </section>
+
+              {/* 6. Guias práticos */}
+              <section className="card side-card guides-mini-card" aria-labelledby="guides-title">
+                <div className="guide-links-head">
+                  <h2 id="guides-title">Guias Práticos</h2>
+                  <button type="button" className="text-link" onClick={() => onSelectTab('guides')}>
+                    Ver todos
+                  </button>
+                </div>
+                {allLessons.length ? (
+                  <ul className="guide-links">
+                    {allLessons.slice(0, 3).map((item) => (
+                      <li key={item.id}>
+                        <button type="button" onClick={() => onOpenLesson(item)}>
+                          <span>{item.title}</span>
+                          {(item.progressPercent ?? 0) >= 100 ? (
+                            <Check size={16} aria-label="Concluído" className="guide-done" />
+                          ) : (
+                            <ArrowRight size={16} aria-hidden="true" />
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="fine-print">Carregando guias…</p>
+                )}
+              </section>
+            </div>
+          </div>
+        )}
+
+        {/* ===================== TAB 2: TRANSAÇÕES & EXTRATOS ===================== */}
+        {activeTab === 'transactions' && (
+          <section className="card full-section-card" aria-labelledby="full-ledger-heading">
+            <div className="full-ledger-top">
+              <div>
+                <h2 id="full-ledger-heading">Extrato &amp; Conciliação de Movimentações</h2>
+                <p className="card-sub">
+                  Todas as receitas, custos fixos e despesas pontuais categorizadas por canal de entrada
                 </p>
               </div>
-            </section>
+            </div>
 
-            {/* 2. Clean Transactions Ledger Card */}
-            <section className="card ledger-card" aria-labelledby="ledger-title">
-              <div className="ledger-card-header">
-                <div>
-                  <div className="ledger-title-row">
-                    <h2 id="ledger-title">Últimas Movimentações</h2>
-                    <span className="today-badge">Hoje</span>
-                  </div>
-                  <p className="card-sub">Lançamentos recentes organizados por data e categoria</p>
-                </div>
-                <div className="segment-pills" role="group" aria-label="Filtrar movimentações">
-                  <button
-                    type="button"
-                    className={ledgerFilter === 'all' ? 'active' : ''}
-                    onClick={() => setLedgerFilter('all')}
-                  >
-                    Todas
-                  </button>
-                  <button
-                    type="button"
-                    className={ledgerFilter === 'fixed' ? 'active' : ''}
-                    onClick={() => setLedgerFilter('fixed')}
-                  >
-                    Fixas
-                  </button>
-                  <button
-                    type="button"
-                    className={ledgerFilter === 'variable' ? 'active' : ''}
-                    onClick={() => setLedgerFilter('variable')}
-                  >
-                    Variáveis
-                  </button>
-                </div>
-              </div>
-
-              {filteredTransactions.length > 0 ? (
-                <ul className="tx-list" aria-label="Lista de movimentações recentes">
-                  {filteredTransactions.slice(0, 6).map((tx) => {
-                    const Icon = categoryIcon(tx.category, tx.kind);
-                    const isIncome = tx.kind === 'income';
-                    return (
-                      <li key={tx.id} className="tx-row">
-                        <div className="tx-main">
-                          <div className={`tx-icon ${isIncome ? 'income' : tx.kind === 'fixed_expense' ? 'fixed' : 'variable'}`}>
-                            <Icon size={18} aria-hidden="true" />
-                          </div>
-                          <div className="tx-info">
-                            <div className="tx-title-line">
-                              <strong className="tx-title">{tx.title}</strong>
-                              {tx.channel === 'photo' && (
-                                <span className="tx-badge ia">
-                                  Extraído via IA{tx.confidence ? ` • ${tx.confidence}%` : ''}
-                                </span>
-                              )}
-                              {tx.channel === 'import' && (
-                                <span className="tx-badge ofx">Sincronização OFX/CSV</span>
-                              )}
-                              {tx.status === 'pending' && (
-                                <span className="tx-badge pending">A vencer</span>
-                              )}
-                            </div>
-                            <div className="tx-meta">
-                              <span>{formatShortDate(tx.occurredOn)}</span>
-                              <span>•</span>
-                              <span className="tx-cat-chip">{tx.category}</span>
-                              {tx.merchantDoc && (
-                                <>
-                                  <span>•</span>
-                                  <span className="tx-doc">{tx.merchantDoc}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="tx-right">
-                          <span className={`tx-amount num ${isIncome ? 'positive' : ''}`}>
-                            {isIncome ? '+' : '−'} {currency(tx.amount)}
-                          </span>
-                          <div className="tx-row-actions">
-                            <button
-                              type="button"
-                              className="icon-button-xs"
-                              title="Editar lançamento"
-                              aria-label={`Editar ${tx.title}`}
-                              onClick={() => openManualModal(tx)}
-                            >
-                              <PenLine size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-button-xs danger"
-                              title="Excluir lançamento"
-                              aria-label={`Excluir ${tx.title}`}
-                              onClick={() => handleDeleteTransaction(tx.id)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="tx-empty">
-                  <p>
-                    <strong>Nenhuma movimentação registrada neste filtro.</strong> Adicione despesas ou receitas manualmente, importe seu extrato OFX/CSV ou leia um comprovante por foto.
-                  </p>
-                  <div className="tx-empty-actions">
-                    <button type="button" className="button button-primary button-small" onClick={() => openManualModal()}>
-                      <Plus size={16} /> Novo lançamento
-                    </button>
-                    <button type="button" className="button button-secondary button-small" onClick={handleSeedDemo} disabled={actionBusy}>
-                      <Sparkles size={16} /> Carregar exemplo do ciclo
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="ledger-card-footer">
-                <span>
-                  {Math.min(filteredTransactions.length, 6)} de {transactions.length} movimentações
-                </span>
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => onSelectTab('transactions')}
-                >
-                  <span>Ver extrato completo</span>
-                  <ArrowRight size={15} />
-                </button>
-              </div>
-            </section>
-
-            {/* 3. Canais de Entrada Inteligente Dock (3 Channels from Stitch & Spec) */}
-            <section className="card channels-card" aria-labelledby="channels-title">
-              <div className="card-head">
-                <div>
-                  <h2 id="channels-title">Canais de Entrada Inteligente</h2>
-                  <p>Três canais integrados com categorização automática</p>
-                </div>
-              </div>
-              <div className="channels-grid">
-                <button type="button" className="channel-box photo-dock" onClick={openReceiptModal}>
-                  <div className="channel-box-top">
-                    <span className="channel-icon"><Camera size={20} /></span>
-                    <div>
-                      <div className="channel-title-row">
-                        <strong>1. Leitura de Comprovante IA</strong>
-                        <span className="ocr-pill">OCR</span>
-                      </div>
-                      <small>Envie foto da nota ou cupom fiscal. Extrai valor, data, CNPJ e sugere a categoria.</small>
-                    </div>
-                  </div>
-                </button>
-                <button type="button" className="channel-box" onClick={openImportModal}>
-                  <div className="channel-box-top">
-                    <span className="channel-icon neutral"><FileUp size={20} /></span>
-                    <div>
-                      <strong>2. Importação Bancária (OFX / CSV / Excel)</strong>
-                      <small>Importe extratos padronizados OFX e planilhas CSV/Excel com conciliação de duplicidades.</small>
-                    </div>
-                  </div>
-                </button>
-                <button type="button" className="channel-box" onClick={() => openManualModal()}>
-                  <div className="channel-box-top">
-                    <span className="channel-icon neutral"><PenLine size={20} /></span>
-                    <div>
-                      <strong>3. Lançamento Rápido Manual</strong>
-                      <small>Registre receitas, custos fixos, despesas pontuais e contas a pagar ou receber.</small>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </section>
-          </div>
-
-          {/* Secondary Right Column (4 cols / 1fr) */}
-          <div className="dash-col">
-            {/* 1. Ritmo Diário de Despesas Sparkline Card */}
-            <section className="card sparkline-card" aria-labelledby="sparkline-title">
-              <div className="sparkline-head">
-                <div className="sparkline-title-wrap">
-                  <TrendingUp size={18} aria-hidden="true" />
-                  <h2 id="sparkline-title">Ritmo Diário de Despesas</h2>
-                </div>
-                <span className="avg-pill num">Média: {currency(dailyAverage)}/dia</span>
-              </div>
-              <div className="sparkline-Wrap">
-                <svg className="sparkline-svg" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true">
-                  <defs>
-                    <linearGradient id="valoraiSparkGrad" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#3c6a53" stopOpacity="0.20" />
-                      <stop offset="100%" stopColor="#3c6a53" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-                  <path d={sparkline.area} fill="url(#valoraiSparkGrad)" />
-                  <path
-                    d={sparkline.line}
-                    fill="none"
-                    stroke="#3c6a53"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx={sparkline.last.x} cy={sparkline.last.y} r="3.5" fill="#3c6a53" />
-                </svg>
-                <div className="sparkline-axis">
-                  <span>DIA 01</span>
-                  <span>DIA 10</span>
-                  <span>DIA 20</span>
-                  <span>HOJE</span>
-                </div>
-              </div>
-            </section>
-
-            {/* 2. Objetivo em Foco / Reserva Financeira Card */}
-            <section className="card goal-focus-card" aria-labelledby="goal-focus-title">
-              <div className="goal-focus-head">
-                <div className="goal-focus-Identity">
-                  <div className="goal-focus-icon">
-                    <PiggyBank size={18} aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h2 id="goal-focus-title">{activeGoal.title}</h2>
-                    <span className="goal-focus-sub">Meta Prioritária</span>
-                  </div>
-                </div>
-                <span className="status-pill balanced">
-                  <i className="status-dot" aria-hidden="true" />
-                  Em dia
-                </span>
-              </div>
-
-              <div className="goal-progress-block">
-                <div className="goal-progress-numbers">
-                  <span className="num">
-                    <strong>{currency(activeGoal.current)}</strong>{' '}
-                    <small>/ {currency(activeGoal.target)}</small>
-                  </span>
-                  <span className="goal-pct num">{activeGoal.percent}% acumulado</span>
-                </div>
-                <progress
-                  className="styled-progress"
-                  max={100}
-                  value={activeGoal.percent}
-                  aria-label={`Progresso da meta ${activeGoal.title}`}
+            <div className="ledger-filters-bar">
+              <div className="search-box">
+                <Search size={16} aria-hidden="true" />
+                <input
+                  type="search"
+                  placeholder="Buscar por descrição, categoria ou documento…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Buscar movimentações"
                 />
               </div>
+              <select
+                value={ledgerFilter}
+                onChange={(e) => setLedgerFilter(e.target.value as typeof ledgerFilter)}
+                aria-label="Filtrar por natureza"
+              >
+                <option value="all">Todas as naturezas</option>
+                <option value="variable">Despesas variáveis</option>
+                <option value="fixed">Gastos fixos</option>
+                <option value="income">Receitas / entradas</option>
+              </select>
+              <select
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value as typeof channelFilter)}
+                aria-label="Filtrar por canal de entrada"
+              >
+                <option value="all">Todos os canais</option>
+                <option value="manual">Digitação manual</option>
+                <option value="import">Importação OFX/CSV/Excel</option>
+                <option value="photo">Comprovante IA (Foto)</option>
+              </select>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                aria-label="Filtrar por categoria"
+              >
+                <option value="all">Todas as categorias</option>
+                {standardCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
 
-              <div className="goal-schedule-note">
-                <Clock3 size={16} aria-hidden="true" />
-                <p>
-                  {activeGoal.monthsRemaining === 0 ? (
-                    <strong>Meta concluída! Parabéns pela disciplina financeira.</strong>
-                  ) : (
-                    <>
-                      No ritmo planejado ({currency(activeGoal.monthly)}/mês), sua meta estará completa em{' '}
-                      <strong>{activeGoal.monthsRemaining} {activeGoal.monthsRemaining === 1 ? 'mês' : 'meses'}</strong>.
-                    </>
-                  )}
-                </p>
-              </div>
-
-              <div className="card-inline-actions">
-                <button type="button" className="button button-secondary button-small" onClick={openGoalModal}>
-                  Registrar aporte / Ajustar meta
-                </button>
-              </div>
-            </section>
-
-            {/* 3. Alerta Informativo de Limite Card */}
-            <section
-              className={`card limit-alert-card ${primaryLimit?.status === 'exceeded' ? 'exceeded' : primaryLimit?.status === 'warning' ? 'warning' : ''}`}
-              aria-labelledby="limit-card-title"
-            >
-              {primaryLimit ? (
-                <>
-                  <div className="limit-card-head">
-                    <div className="limit-card-title-group">
-                      <div className={`limit-icon-tile ${primaryLimit.status === 'ok' ? 'ok' : 'alert'}`}>
-                        <BellRing size={17} aria-hidden="true" />
+            {filteredTransactions.length > 0 ? (
+              <ul className="tx-list" aria-label="Extrato completo">
+                {filteredTransactions.map((tx) => {
+                  const Icon = categoryIcon(tx.category, tx.kind);
+                  const isIncome = tx.kind === 'income';
+                  return (
+                    <li key={tx.id} className="tx-row">
+                      <div className="tx-main">
+                        <div className={`tx-icon ${isIncome ? 'income' : tx.kind === 'fixed_expense' ? 'fixed' : 'variable'}`}>
+                          <Icon size={18} aria-hidden="true" />
+                        </div>
+                        <div className="tx-info">
+                          <div className="tx-title-line">
+                            <strong className="tx-title">{tx.title}</strong>
+                            <span className={`tx-badge ${tx.channel === 'photo' ? 'ia' : tx.channel === 'import' ? 'ofx' : ''}`}>
+                              {tx.channel === 'photo'
+                                ? `Extraído via IA${tx.confidence ? ` • ${tx.confidence}%` : ''}`
+                                : tx.channel === 'import'
+                                  ? 'Extrato OFX/CSV'
+                                  : 'Manual'}
+                            </span>
+                            <button
+                              type="button"
+                              className={`tx-status-pill ${tx.status}`}
+                              onClick={() => handleToggleStatus(tx.id)}
+                              title="Alternar entre Liquidado e A vencer"
+                            >
+                              {tx.status === 'paid' ? 'Liquidado' : 'A pagar / Pendente'}
+                            </button>
+                          </div>
+                          <div className="tx-meta">
+                            <span>{formatShortDate(tx.occurredOn)}</span>
+                            <span>•</span>
+                            <span className="tx-cat-chip">{tx.category}</span>
+                            {tx.merchantDoc && (
+                              <>
+                                <span>•</span>
+                                <span className="tx-doc">{tx.merchantDoc}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <h2 id="limit-card-title">{primaryLimit.category}</h2>
-                    </div>
-                    <span className={`limit-pct-badge num ${primaryLimit.status}`}>
-                      {primaryLimit.percent}%
-                    </span>
-                  </div>
-                  <div className="limit-progress-wrap">
-                    <progress
-                      className={`styled-progress ${primaryLimit.status !== 'ok' ? 'terracotta' : ''}`}
-                      max={100}
-                      value={Math.min(100, primaryLimit.percent)}
-                      aria-label={`Consumo do limite ${primaryLimit.category}`}
-                    />
-                    <div className="limit-numbers num">
-                      <span>
-                        {primaryLimit.scope === 'card_share'
-                          ? `${primaryLimit.spent}% consumidos`
-                          : `${currency(primaryLimit.spent)} gastos`}
-                      </span>
-                      <span>
-                        Teto estimado:{' '}
-                        {primaryLimit.scope === 'card_share'
-                          ? `${primaryLimit.limit}%`
-                          : currency(primaryLimit.limit)}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="limit-advisory">{primaryLimit.advisory}</p>
-                  <div className="card-inline-actions">
-                    <button
-                      type="button"
-                      className="button button-secondary button-small"
-                      onClick={() => openLimitModal(primaryLimit)}
-                    >
-                      Ajustar Teto
-                    </button>
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => {
-                        const targetLesson = allLessons.find((l) => l.id === primaryLimit.lessonId) ?? allLessons[0];
-                        if (targetLesson) onOpenLesson(targetLesson);
-                      }}
-                    >
-                      Guia recomendado
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="limit-card-head">
-                    <div className="limit-card-title-group">
-                      <div className="limit-icon-tile ok">
-                        <BellRing size={17} aria-hidden="true" />
-                      </div>
-                      <h2 id="limit-card-title">Limites &amp; Alertas</h2>
-                    </div>
-                  </div>
-                  <p className="card-sub">
-                    Defina tetos por categoria (ex.: Lazer &amp; Restaurantes R$ 600) ou limite diário (ex.: R$ 100/dia). O alerta avisa sem bloquear transações.
-                  </p>
-                  <div className="card-inline-actions">
-                    <button type="button" className="button button-secondary button-small" onClick={() => openLimitModal()}>
-                      Configurar teto de gastos
-                    </button>
-                  </div>
-                </>
-              )}
-            </section>
-
-            {/* 4. Guias Práticos (Educação Financeira) Card */}
-            <section className="card" aria-labelledby="guides-title">
-              <div className="card-head">
-                <div>
-                  <h2 id="guides-title">Guias Práticos</h2>
-                  <p>Leituras curtas sobre organização financeira</p>
-                </div>
-                <button type="button" className="link-button" onClick={() => onSelectTab('guides')}>
-                  Ver todos
-                </button>
-              </div>
-              {allLessons.length ? (
-                <ul className="guide-list">
-                  {allLessons.map((item) => (
-                    <li key={item.id}>
-                      <button type="button" onClick={() => onOpenLesson(item)}>
-                        <span className="guide-icon">
-                          <BookOpen size={19} aria-hidden="true" />
+                      <div className="tx-right">
+                        <span className={`tx-amount num ${isIncome ? 'positive' : ''}`}>
+                          {isIncome ? '+' : '−'} {currency(tx.amount)}
                         </span>
-                        <strong>{item.title}</strong>
-                        <small>{item.description}</small>
-                        <span className="guide-time">
-                          <Clock3 size={14} aria-hidden="true" />
-                          {item.minutes} min
-                          {(item.progressPercent ?? 0) >= 100 && (
-                            <span className="guide-done-dot" title="Concluído" aria-label="Concluído">✓</span>
-                          )}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="fine-print">Carregando guias…</p>
-              )}
-            </section>
-
-            {/* 5. Sua Conta & Manutenção Cadastral (RF003 & RF005) */}
-            <section className="card" aria-labelledby="account-title">
-              <div className="card-head">
-                <div>
-                  <h2 id="account-title">Sua conta</h2>
-                  <p>Dados cadastrais e segurança</p>
-                </div>
-                <button type="button" className="button button-secondary button-small" onClick={openProfileModal}>
-                  Editar cadastro
-                </button>
-              </div>
-              <dl className="account-list">
-                <div>
-                  <dt>Nome</dt>
-                  <dd>{account.name}</dd>
-                </div>
-                <div>
-                  <dt>E-mail</dt>
-                  <dd>{account.email}</dd>
-                </div>
-                <div>
-                  <dt>Cidade</dt>
-                  <dd>{account.city} · {account.state}</dd>
-                </div>
-                <div>
-                  <dt>Confirmação</dt>
-                  <dd>Demonstração</dd>
-                </div>
-              </dl>
-              <div className="danger-zone">
-                <button type="button" className="link-button" onClick={onOpenDeactivate}>
-                  Desativar minha conta
-                </button>
-              </div>
-            </section>
-          </div>
-        </div>
-      )}
-
-      {/* ===================== TAB 2: TRANSAÇÕES & EXTRATOS ===================== */}
-      {activeTab === 'transactions' && (
-        <section className="card full-section-card" aria-labelledby="full-ledger-heading">
-          <div className="full-ledger-top">
-            <div>
-              <h2 id="full-ledger-heading">Extrato &amp; Conciliação de Movimentações</h2>
-              <p className="card-sub">
-                Todas as receitas, custos fixos e despesas pontuais categorizadas por canal de entrada
-              </p>
-            </div>
-            <div className="full-ledger-actions">
-              <button type="button" className="button button-secondary button-small" onClick={openReceiptModal}>
-                <Camera size={16} /> Ler comprovante IA
-              </button>
-              <button type="button" className="button button-secondary button-small" onClick={openImportModal}>
-                <FileUp size={16} /> Importar OFX / CSV
-              </button>
-              <button type="button" className="button button-primary button-small" onClick={() => openManualModal()}>
-                <Plus size={16} /> Novo lançamento
-              </button>
-            </div>
-          </div>
-
-          {/* Filter Controls Bar */}
-          <div className="ledger-filters-bar">
-            <div className="search-box">
-              <Search size={16} aria-hidden="true" />
-              <input
-                type="search"
-                placeholder="Buscar por descrição, categoria ou documento…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Buscar movimentações"
-              />
-            </div>
-            <select
-              value={ledgerFilter}
-              onChange={(e) => setLedgerFilter(e.target.value as typeof ledgerFilter)}
-              aria-label="Filtrar por natureza"
-            >
-              <option value="all">Todas as naturezas</option>
-              <option value="variable">Despesas variáveis</option>
-              <option value="fixed">Gastos fixos</option>
-              <option value="income">Receitas / entradas</option>
-            </select>
-            <select
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value as typeof channelFilter)}
-              aria-label="Filtrar por canal de entrada"
-            >
-              <option value="all">Todos os canais</option>
-              <option value="manual">Digitação manual</option>
-              <option value="import">Importação OFX/CSV/Excel</option>
-              <option value="photo">Comprovante IA (Foto)</option>
-            </select>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              aria-label="Filtrar por categoria"
-            >
-              <option value="all">Todas as categorias</option>
-              {standardCategories.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          {filteredTransactions.length > 0 ? (
-            <ul className="tx-list" aria-label="Extrato completo">
-              {filteredTransactions.map((tx) => {
-                const Icon = categoryIcon(tx.category, tx.kind);
-                const isIncome = tx.kind === 'income';
-                return (
-                  <li key={tx.id} className="tx-row">
-                    <div className="tx-main">
-                      <div className={`tx-icon ${isIncome ? 'income' : tx.kind === 'fixed_expense' ? 'fixed' : 'variable'}`}>
-                        <Icon size={18} aria-hidden="true" />
-                      </div>
-                      <div className="tx-info">
-                        <div className="tx-title-line">
-                          <strong className="tx-title">{tx.title}</strong>
-                          <span className={`tx-badge ${tx.channel === 'photo' ? 'ia' : tx.channel === 'import' ? 'ofx' : ''}`}>
-                            {tx.channel === 'photo'
-                              ? `Recibo IA${tx.confidence ? ` • ${tx.confidence}%` : ''}`
-                              : tx.channel === 'import'
-                                ? 'Extrato OFX/CSV'
-                                : 'Manual'}
-                          </span>
-                          <button
-                            type="button"
-                            className={`tx-status-pill ${tx.status}`}
-                            onClick={() => handleToggleStatus(tx.id)}
-                            title="Alternar entre Liquidado e A vencer"
-                          >
-                            {tx.status === 'paid' ? 'Liquidado' : 'A pagar / Pendente'}
-                          </button>
-                        </div>
-                        <div className="tx-meta">
-                          <span>{formatShortDate(tx.occurredOn)}</span>
-                          <span>•</span>
-                          <span className="tx-cat-chip">{tx.category}</span>
-                          {tx.merchantDoc && (
-                            <>
-                              <span>•</span>
-                              <span className="tx-doc">{tx.merchantDoc}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="tx-right">
-                      <span className={`tx-amount num ${isIncome ? 'positive' : ''}`}>
-                        {isIncome ? '+' : '−'} {currency(tx.amount)}
-                      </span>
-                      <div className="tx-row-actions">
-                        <button
-                          type="button"
-                          className="icon-button-xs"
-                          aria-label={`Editar ${tx.title}`}
-                          onClick={() => openManualModal(tx)}
-                        >
-                          <PenLine size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button-xs danger"
-                          aria-label={`Excluir ${tx.title}`}
-                          onClick={() => handleDeleteTransaction(tx.id)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <div className="tx-empty">
-              <p>Nenhum lançamento corresponde aos filtros selecionados.</p>
-              <div className="tx-empty-actions">
-                <button type="button" className="button button-primary button-small" onClick={() => openManualModal()}>
-                  <Plus size={16} /> Adicionar lançamento
-                </button>
-                <button type="button" className="button button-secondary button-small" onClick={handleSeedDemo}>
-                  Carregar exemplo do ciclo
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ===================== TAB 3: PLANEJAMENTO & METAS ===================== */}
-      {activeTab === 'planning' && (
-        <div className="dash-grid">
-          <div className="dash-col">
-            <section className="card" aria-labelledby="planning-limits-title">
-              <div className="card-head">
-                <div>
-                  <h2 id="planning-limits-title">Metas &amp; Limites Orçamentários</h2>
-                  <p>Tetos configuráveis por categoria, consumo diário e cartão (alertas sem bloqueio)</p>
-                </div>
-                <button type="button" className="button button-primary button-small" onClick={() => openLimitModal()}>
-                  <Plus size={16} /> Novo limite
-                </button>
-              </div>
-
-              {limits.length > 0 ? (
-                <div className="limits-stack">
-                  {limits.map((lim) => (
-                    <div key={lim.id} className={`limit-item-box ${lim.status}`}>
-                      <div className="limit-card-head">
-                        <div>
-                          <strong>{lim.category}</strong>
-                          <small className="block-sub">
-                            {lim.scope === 'daily'
-                              ? 'Teto de consumo diário'
-                              : lim.scope === 'card_share'
-                                ? 'Limite percentual no cartão'
-                                : 'Limite mensal da categoria'}
-                          </small>
-                        </div>
-                        <div className="limit-item-right">
-                          <span className={`limit-pct-badge num ${lim.status}`}>{lim.percent}%</span>
+                        <div className="tx-row-actions">
                           <button
                             type="button"
                             className="icon-button-xs"
-                            aria-label={`Editar limite ${lim.category}`}
-                            onClick={() => openLimitModal(lim)}
+                            aria-label={`Editar ${tx.title}`}
+                            onClick={() => openManualModal(tx)}
                           >
                             <PenLine size={14} />
                           </button>
                           <button
                             type="button"
                             className="icon-button-xs danger"
-                            aria-label={`Remover limite ${lim.category}`}
-                            onClick={() => handleDeleteLimit(lim.id)}
+                            aria-label={`Excluir ${tx.title}`}
+                            onClick={() => handleDeleteTransaction(tx.id)}
                           >
                             <Trash2 size={14} />
                           </button>
                         </div>
                       </div>
-                      <progress
-                        className={`styled-progress ${lim.status !== 'ok' ? 'terracotta' : ''}`}
-                        max={100}
-                        value={Math.min(100, lim.percent)}
-                      />
-                      <div className="limit-numbers num">
-                        <span>
-                          Consumido:{' '}
-                          {lim.scope === 'card_share' ? `${lim.spent}%` : currency(lim.spent)}
-                        </span>
-                        <span>
-                          Teto:{' '}
-                          {lim.scope === 'card_share' ? `${lim.limit}%` : currency(lim.limit)} (alerta em {lim.warnPercent}%)
-                        </span>
-                      </div>
-                      <p className="limit-advisory">{lim.advisory}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="tx-empty">
-                  <p>Nenhum limite configurado ainda. Crie um teto para receber avisos preventivos.</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="tx-empty">
+                <p>
+                  {transactions.length
+                    ? 'Nenhum lançamento corresponde aos filtros selecionados.'
+                    : 'Nenhuma movimentação registrada. Use Novo Lançamento para começar.'}
+                </p>
+                {!transactions.length && (
+                  <div className="tx-empty-actions">
+                    <button type="button" className="button button-secondary button-small" onClick={handleSeedDemo} disabled={actionBusy}>
+                      <Sparkles size={16} aria-hidden="true" /> Carregar exemplo do ciclo
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ===================== TAB 3: PLANEJAMENTO ===================== */}
+        {activeTab === 'planning' && (
+          <div className="dash-grid">
+            <div className="dash-col">
+              <section className="card" aria-labelledby="planning-limits-title">
+                <div className="card-head">
+                  <div>
+                    <h2 id="planning-limits-title">Metas &amp; Limites Orçamentários</h2>
+                    <p>Tetos configuráveis por categoria, consumo diário e cartão (alertas sem bloqueio)</p>
+                  </div>
                   <button type="button" className="button button-primary button-small" onClick={() => openLimitModal()}>
-                    Criar primeiro limite
+                    <Plus size={16} aria-hidden="true" /> Novo limite
                   </button>
                 </div>
-              )}
-            </section>
-          </div>
 
-          <div className="dash-col">
-            <section className="card" aria-labelledby="planning-goal-title">
-              <div className="card-head">
-                <div>
-                  <h2 id="planning-goal-title">Objetivo Prioritário: {activeGoal.title}</h2>
-                  <p>Acompanhamento de reserva e aportes mensais</p>
-                </div>
-                <button type="button" className="button button-secondary button-small" onClick={openGoalModal}>
-                  Configurar meta
-                </button>
-              </div>
-              <div className="goal-progress-block">
-                <div className="goal-progress-numbers">
-                  <span className="num">
-                    <strong>{currency(activeGoal.current)}</strong> <small>/ {currency(activeGoal.target)}</small>
-                  </span>
-                  <span className="goal-pct num">{activeGoal.percent}%</span>
-                </div>
-                <progress className="styled-progress" max={100} value={activeGoal.percent} />
-              </div>
-              <p className="fine-print">
-                Aporte mensal planejado: <strong>{currency(activeGoal.monthly)}</strong> • Previsão:{' '}
-                <strong>{activeGoal.monthsRemaining} meses</strong>.
-              </p>
-              <div className="card-inline-actions">
-                <button type="button" className="button button-primary button-small" onClick={openGoalModal}>
-                  Registrar novo aporte
-                </button>
-                <button type="button" className="button button-secondary button-small" onClick={onEditFinanceProfile}>
-                  Ajustar perfil base
-                </button>
-              </div>
-            </section>
-          </div>
-        </div>
-      )}
+                {limits.length > 0 ? (
+                  <div className="limits-stack">
+                    {limits.map((lim) => (
+                      <div key={lim.id} className={`limit-item-box ${lim.status}`}>
+                        <div className="limit-card-head">
+                          <div>
+                            <strong>{lim.category}</strong>
+                            <small className="block-sub">
+                              {lim.scope === 'daily'
+                                ? 'Teto de consumo diário'
+                                : lim.scope === 'card_share'
+                                  ? 'Limite percentual no cartão'
+                                  : 'Limite mensal da categoria'}
+                            </small>
+                          </div>
+                          <div className="limit-item-right">
+                            <span className={`limit-pct-badge num ${lim.status}`}>{lim.percent}%</span>
+                            <button
+                              type="button"
+                              className="icon-button-xs"
+                              aria-label={`Editar limite ${lim.category}`}
+                              onClick={() => openLimitModal(lim)}
+                            >
+                              <PenLine size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button-xs danger"
+                              aria-label={`Remover limite ${lim.category}`}
+                              onClick={() => handleDeleteLimit(lim.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                        <progress
+                          className={`styled-progress ${lim.status !== 'ok' ? 'terracotta' : ''}`}
+                          max={100}
+                          value={Math.min(100, lim.percent)}
+                          aria-label={`Consumo do limite ${lim.category}`}
+                        />
+                        <div className="limit-numbers num">
+                          <span>
+                            Consumido:{' '}
+                            {lim.scope === 'card_share' ? `${lim.spent}%` : currency(lim.spent)}
+                          </span>
+                          <span>
+                            Teto:{' '}
+                            {lim.scope === 'card_share' ? `${lim.limit}%` : currency(lim.limit)} (alerta em {lim.warnPercent}%)
+                          </span>
+                        </div>
+                        <p className="limit-advisory">{lim.advisory}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="tx-empty">
+                    <p>Nenhum limite configurado ainda. Crie um teto para receber avisos preventivos.</p>
+                  </div>
+                )}
+              </section>
+            </div>
 
-      {/* ===================== TAB 4: GUIAS PRÁTICOS ===================== */}
-      {activeTab === 'guides' && (
-        <section className="card full-section-card" aria-labelledby="guides-library-title">
-          <div className="card-head">
-            <div>
-              <h2 id="guides-library-title">Biblioteca de Educação Financeira</h2>
-              <p>Guias práticos pré-carregados para apoiar suas decisões e metas</p>
+            <div className="dash-col">
+              <section className="card" aria-labelledby="planning-goal-title">
+                <div className="card-head">
+                  <div>
+                    <h2 id="planning-goal-title">Objetivo Prioritário: {activeGoal.title}</h2>
+                    <p>Acompanhamento de reserva e aportes mensais</p>
+                  </div>
+                </div>
+                <div className="goal-progress-block">
+                  <div className="goal-progress-numbers">
+                    <span className="num">
+                      <strong>{currency(activeGoal.current)}</strong> <small>/ {currency(activeGoal.target)}</small>
+                    </span>
+                    <span className="goal-pct num">{activeGoal.percent}%</span>
+                  </div>
+                  <progress
+                    className="styled-progress"
+                    max={100}
+                    value={activeGoal.percent}
+                    aria-label={`Progresso da meta ${activeGoal.title}`}
+                  />
+                </div>
+                <p className="fine-print">
+                  Aporte mensal planejado: <strong>{currency(activeGoal.monthly)}</strong> • Previsão:{' '}
+                  <strong>{activeGoal.monthsRemaining} {activeGoal.monthsRemaining === 1 ? 'mês' : 'meses'}</strong>.
+                </p>
+                <div className="card-inline-actions">
+                  <button type="button" className="button button-primary button-small" onClick={openGoalModal}>
+                    Registrar aporte / Ajustar meta
+                  </button>
+                </div>
+              </section>
             </div>
           </div>
-          <div className="guides-cards-grid">
-            {allLessons.map((item) => {
-              const pct = item.progressPercent ?? 0;
-              return (
-                <article key={item.id} className="guide-editorial-card">
-                  <div className="guide-editorial-top">
-                    <span className="guide-icon">
-                      <BookOpen size={20} aria-hidden="true" />
-                    </span>
-                    <span className="tag">
-                      <Clock3 size={13} /> {item.minutes} min de leitura
-                    </span>
-                  </div>
-                  <h3>{item.title}</h3>
-                  <p>{item.description}</p>
-                  <div className="guide-progress-row">
-                    <progress className="styled-progress" max={100} value={pct} />
-                    <div className="guide-progress-meta">
-                      <span>{pct >= 100 ? 'Concluído' : pct > 0 ? `Em leitura (${pct}%)` : 'Não iniciado'}</span>
-                      <div className="guide-card-btns">
-                        <button
-                          type="button"
-                          className="link-button"
-                          onClick={() => onOpenLesson(item)}
-                        >
-                          Ler guia
-                        </button>
-                        {pct < 100 && (
+        )}
+
+        {/* ===================== TAB 4: GUIAS ===================== */}
+        {activeTab === 'guides' && (
+          <section className="card full-section-card" aria-labelledby="guides-library-title">
+            <div className="card-head">
+              <div>
+                <h2 id="guides-library-title">Biblioteca de Educação Financeira</h2>
+                <p>Guias práticos pré-carregados para apoiar suas decisões e metas</p>
+              </div>
+            </div>
+            <div className="guides-cards-grid">
+              {allLessons.map((item) => {
+                const pct = item.progressPercent ?? 0;
+                return (
+                  <article key={item.id} className="guide-editorial-card">
+                    <div className="guide-editorial-top">
+                      <span className="guide-icon">
+                        <BookOpen size={20} aria-hidden="true" />
+                      </span>
+                      <span className="tag">
+                        <Clock3 size={13} aria-hidden="true" /> {item.minutes} min de leitura
+                      </span>
+                    </div>
+                    <h3>{item.title}</h3>
+                    <p>{item.description}</p>
+                    <div className="guide-progress-row">
+                      <progress className="styled-progress" max={100} value={pct} aria-label={`Progresso de leitura: ${item.title}`} />
+                      <div className="guide-progress-meta">
+                        <span>{pct >= 100 ? 'Concluído' : pct > 0 ? `Em leitura (${pct}%)` : 'Não iniciado'}</span>
+                        <div className="guide-card-btns">
                           <button
                             type="button"
-                            className="button button-secondary button-small"
-                            onClick={() => handleMarkLessonProgress(item.id, 100)}
-                            disabled={actionBusy}
+                            className="link-button"
+                            onClick={() => onOpenLesson(item)}
                           >
-                            Marcar concluído
+                            Ler guia
                           </button>
-                        )}
+                          {pct < 100 && (
+                            <button
+                              type="button"
+                              className="button button-secondary button-small"
+                              onClick={() => handleMarkLessonProgress(item.id, 100)}
+                              disabled={actionBusy}
+                            >
+                              Marcar concluído
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </main>
+
+      <footer className="site-footer dash-footer">
+        <div>
+          <span>Uma iniciativa</span>
+          <img src={companyLogo} alt="Nulfinance Inc." width="84" height="28" />
+        </div>
+        <div className="dash-footer-meta">
+          <button type="button" className="text-link muted" onClick={onOpenAbout}>Sobre o protótipo</button>
+          <span aria-hidden="true">•</span>
+          <span>Ciclo ativo {cycleCode}</span>
+        </div>
+      </footer>
 
       {/* ===================== MOBILE BOTTOM BAR ===================== */}
       <nav className="mobile-bottom-nav" aria-label="Navegação móvel">
-        <button
-          type="button"
-          className={activeTab === 'overview' ? 'active' : ''}
-          onClick={() => onSelectTab('overview')}
-        >
-          <Wallet size={20} aria-hidden="true" />
-          <span>Visão Geral</span>
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'transactions' ? 'active' : ''}
-          onClick={() => onSelectTab('transactions')}
-        >
-          <CreditCard size={20} aria-hidden="true" />
-          <span>Transações</span>
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'planning' ? 'active' : ''}
-          onClick={() => onSelectTab('planning')}
-        >
-          <Target size={20} aria-hidden="true" />
-          <span>Metas</span>
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'guides' ? 'active' : ''}
-          onClick={() => onSelectTab('guides')}
-        >
-          <BookOpen size={20} aria-hidden="true" />
-          <span>Guias</span>
-        </button>
+        {navItems.map(({ id, short, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            className={activeTab === id ? 'active' : ''}
+            aria-current={activeTab === id ? 'page' : undefined}
+            onClick={() => onSelectTab(id)}
+          >
+            <Icon size={20} aria-hidden="true" />
+            <span>{short}</span>
+          </button>
+        ))}
       </nav>
+
+      {/* Greeting kept for screen readers that land on the workspace. */}
+      <p className="sr-only" aria-live="polite">{`Painel de ${firstName}: ${tabMeta[activeTab].title}`}</p>
 
       {/* ===================== MODALS ===================== */}
 
@@ -2447,6 +2442,6 @@ export default function DashboardWorkspace({
           </form>
         </LightDismissModal>
       )}
-    </div>
+    </>
   );
 }

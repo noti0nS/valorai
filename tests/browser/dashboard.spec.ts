@@ -40,10 +40,11 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   expect((await post(page.request, 'finance', { income: 4200, fixedExpenses: 1700, goal: 'reserve' })).status()).toBe(200);
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Olá, Mariana/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Visão Geral' })).toBeVisible();
   await expect(page.getByText('R$ 2.500,00', { exact: true })).toBeVisible();
 
-  // 1. Channel 1: Manual Transaction with Auto-Category Suggestion
+  // 1. Channel 1: Manual Transaction via Unified 'Novo Lançamento' Button
+  await page.getByRole('button', { name: /Novo Lançamento/ }).click();
   await page.getByRole('button', { name: 'Digitação manual' }).click();
   const manualDialog = page.getByRole('dialog');
   await expect(manualDialog).toBeVisible();
@@ -53,7 +54,8 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   await manualDialog.getByRole('button', { name: 'Registrar lançamento' }).click();
   await expect(page.getByText('Restaurante Sabor Nordestino')).toBeVisible();
 
-  // 2. Channel 2: AI/OCR Receipt Extraction & Validation
+  // 2. Channel 2: AI/OCR Receipt Extraction & Validation via 'Novo Lançamento'
+  await page.getByRole('button', { name: /Novo Lançamento/ }).click();
   await page.getByRole('button', { name: 'Ler comprovante (OCR)' }).click();
   const receiptDialog = page.getByRole('dialog');
   await expect(receiptDialog).toBeVisible();
@@ -62,9 +64,9 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   await expect(receiptDialog.getByLabel('Estabelecimento identificado')).toHaveValue('Pão de Açúcar • Supermercado');
   await receiptDialog.getByRole('button', { name: 'Confirmar e lançar comprovante' }).click();
   await expect(page.getByText('Pão de Açúcar • Supermercado')).toBeVisible();
-  await expect(page.getByText(/Extraído via IA • 99%/)).toBeVisible();
 
-  // 3. Channel 3: Batch Import (OFX) with Deduplication
+  // 3. Channel 3: Batch Import (OFX) with Deduplication via 'Novo Lançamento'
+  await page.getByRole('button', { name: /Novo Lançamento/ }).click();
   await page.getByRole('button', { name: 'Importar OFX / CSV' }).click();
   const importDialog = page.getByRole('dialog');
   await expect(importDialog).toBeVisible();
@@ -73,7 +75,7 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   await importDialog.getByRole('button', { name: 'Confirmar importação em lote' }).click();
   await expect(page.getByText('Aluguel e Condominio Residencial')).toBeVisible();
 
-  // 4. Budget Limit & Non-Blocking Alert (Alimentação & Mercado spent = 342.80 + 342.80 = 685.60 -> set limit to 500.00)
+  // 4. Budget Limit & Non-Blocking Alert
   await page.getByRole('button', { name: 'Configurar teto de gastos' }).click();
   const limitDialog = page.getByRole('dialog');
   await expect(limitDialog).toBeVisible();
@@ -82,15 +84,8 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   await limitDialog.getByRole('button', { name: 'Salvar teto' }).click();
   await expect(page.getByText('Aviso de referência para disciplina orçamentária. Gastos não são bloqueados.')).toBeVisible();
 
-  // 5. Priority Goal Contribution (Aporte)
-  await page.getByRole('button', { name: 'Registrar aporte / Ajustar meta' }).click();
-  const goalDialog = page.getByRole('dialog');
-  await expect(goalDialog).toBeVisible();
-  await goalDialog.getByLabel('Novo aporte hoje (opcional R$)').fill('500');
-  await goalDialog.getByRole('button', { name: 'Salvar evolução da meta' }).click();
-  await expect(page.getByText(/Aporte de R\$\s*500,00 registrado na sua meta\./)).toBeVisible();
-
-  // 6. RF003 Personal Profile Update & Immutable CPF check
+  // 5. RF003 Personal Profile Update via Condensed Profile Panel
+  await page.getByRole('button', { name: /Painel do perfil/ }).click();
   await page.getByRole('button', { name: 'Editar cadastro' }).click();
   const profileDialog = page.getByRole('dialog');
   await expect(profileDialog).toBeVisible();
@@ -99,20 +94,30 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   await profileDialog.getByRole('button', { name: 'Salvar dados cadastrais' }).click();
   await expect(page.getByText('Dados cadastrais atualizados e registrados no histórico.')).toBeVisible();
 
-  // 7. Navigate Sub-views: Transações & Extratos, Planejamento & Metas, Guias Práticos
-  await page.locator('.dash-view-switcher').getByRole('button', { name: /Transações & Extratos/ }).click();
+  // 6. Navigate Sub-views via Header Navigation (no duplicate switcher)
+  await page.locator('.header-nav').getByRole('button', { name: 'Transações & Extratos' }).click();
   await expect(page.getByRole('heading', { name: 'Extrato & Conciliação de Movimentações' })).toBeVisible();
+  await expect(page.getByText(/Extraído via IA • 99%/)).toBeVisible();
 
-  await page.locator('.dash-view-switcher').getByRole('button', { name: /Planejamento & Metas/ }).click();
+  await page.locator('.header-nav').getByRole('button', { name: 'Planejamento' }).click();
   await expect(page.getByRole('heading', { name: 'Metas & Limites Orçamentários' })).toBeVisible();
 
-  await page.locator('.dash-view-switcher').getByRole('button', { name: 'Guias Práticos' }).click();
+  // 7. Priority Goal Contribution (Aporte) in Planning view
+  await page.getByRole('button', { name: 'Registrar aporte / Ajustar meta' }).click();
+  const goalDialog = page.getByRole('dialog');
+  await expect(goalDialog).toBeVisible();
+  await goalDialog.getByLabel('Novo aporte hoje (opcional R$)').fill('500');
+  await goalDialog.getByRole('button', { name: 'Salvar evolução da meta' }).click();
+  await expect(page.getByText(/Aporte de R\$\s*500,00 registrado na sua meta\./)).toBeVisible();
+
+  await page.locator('.header-nav').getByRole('button', { name: 'Guias' }).click();
   await expect(page.getByRole('heading', { name: 'Biblioteca de Educação Financeira' })).toBeVisible();
   await page.getByRole('button', { name: 'Ler guia' }).first().click();
   await page.getByRole('button', { name: 'Marcar como concluído' }).click();
   await expect(page.getByText('Leitura concluída').first()).toBeVisible();
   await page.getByRole('button', { name: 'Fechar guia' }).click();
 
+  await page.locator('.header-nav').getByRole('button', { name: 'Visão Geral' }).click();
   await page.screenshot({ path: 'test-results/stitch-dashboard-operational.png', fullPage: true });
   expect(consoleErrors).toEqual([]);
 });
