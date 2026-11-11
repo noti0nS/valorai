@@ -70,6 +70,11 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   await page.getByRole('button', { name: 'Importar OFX / CSV' }).click();
   const importDialog = page.getByRole('dialog');
   await expect(importDialog).toBeVisible();
+  // Verify that canceling a native file/input picker (which fires a bubbling `cancel` event) does not close the modal
+  await importDialog.locator('#importFileInput').evaluate((el) => {
+    el.dispatchEvent(new Event('cancel', { bubbles: true }));
+  });
+  await expect(importDialog).toBeVisible();
   await importDialog.getByRole('button', { name: 'Testar Extrato OFX Bancário' }).click();
   await expect(importDialog.getByText('Aluguel e Condominio Residencial')).toBeVisible();
   await importDialog.getByRole('button', { name: 'Confirmar importação em lote' }).click();

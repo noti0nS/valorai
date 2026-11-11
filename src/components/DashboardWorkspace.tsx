@@ -288,6 +288,19 @@ async function extractXlsxText(file: File): Promise<string> {
 
 export function LightDismissModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const backdropPointerDownRef = useRef(false);
+
+  const isOutsideDialogBox = (dialog: HTMLDialogElement, clientX: number, clientY: number) => {
+    if (clientX === 0 && clientY === 0) return false;
+    const rect = dialog.getBoundingClientRect();
+    return (
+      clientY < rect.top ||
+      clientY > rect.top + rect.height ||
+      clientX < rect.left ||
+      clientX > rect.left + rect.width
+    );
+  };
+
   return (
     <dialog
       ref={(node) => {
@@ -296,20 +309,35 @@ export function LightDismissModal({ title, children, onClose }: { title: string;
           try { node.showModal(); } catch { /* already open */ }
         }
       }}
-      {...({ closedby: 'any' } as Record<string, string>)}
       className="modal"
-      onCancel={onClose}
-      onClose={onClose}
+      onCancel={(event) => {
+        // Ignore bubbling `cancel` events dispatched by child controls
+        // such as <input type="file">, <input type="date">, or <select>.
+        if (event.target !== event.currentTarget) {
+          event.stopPropagation();
+          return;
+        }
+        event.preventDefault();
+        onClose();
+      }}
+      onClose={(event) => {
+        if (event.target !== event.currentTarget) return;
+        onClose();
+      }}
+      onPointerDown={(event) => {
+        const dialog = ref.current;
+        backdropPointerDownRef.current = Boolean(
+          dialog && event.target === dialog && isOutsideDialogBox(dialog, event.clientX, event.clientY),
+        );
+      }}
       onClick={(event) => {
         const dialog = ref.current;
-        if (!dialog || event.target !== dialog) return;
-        const rect = dialog.getBoundingClientRect();
-        const inside =
-          rect.top <= event.clientY &&
-          event.clientY <= rect.top + rect.height &&
-          rect.left <= event.clientX &&
-          event.clientX <= rect.left + rect.width;
-        if (!inside) onClose();
+        const startedOnBackdrop = backdropPointerDownRef.current;
+        backdropPointerDownRef.current = false;
+        if (!dialog || !startedOnBackdrop || event.target !== dialog || event.detail === 0) return;
+        if (isOutsideDialogBox(dialog, event.clientX, event.clientY)) {
+          onClose();
+        }
       }}
       aria-labelledby="dialog-modal-title"
     >
