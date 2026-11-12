@@ -70,7 +70,6 @@ def test_deactivation_keeps_finance_and_drops_sessions(world):
     assert stored.income == 350000
     assert world["sessions"].rows == {}
     assert world["confirmation"].codes.get(created.id) is None
-    assert world["audit"].events[-1][1] == "account_deactivated"
 
 
 def pytest_raises(error):

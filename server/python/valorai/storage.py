@@ -119,6 +119,9 @@ class MemoryAudit:
     def record(self, account_id: str | None, event: str, ip_hash: str, created_at: int) -> None:
         self.events.append((account_id, event, ip_hash, created_at))
 
+    def bind(self, ip_hash: str, now: int) -> None:
+        """Memory stores have no triggers, so there is no request context to bind."""
+
 
 class MemoryLessons:
     def __init__(self, lessons: list[dict] | None = None):
@@ -385,8 +388,14 @@ class SqlSessions:
 
 
 class SqlAudit:
+    """Identity events are recorded here; data-change events come from triggers (migration 0003)."""
+
     def __init__(self, db: SqliteDb):
         self.db = db
+
+    def bind(self, ip_hash: str, now: int) -> None:
+        """Give the audit triggers the IP hash and clock of the current request."""
+        self.db.execute("UPDATE audit_context SET ip_hash = ?, at = ? WHERE id = 1", (ip_hash, now))
 
     def record(self, account_id: str | None, event: str, ip_hash: str, created_at: int) -> None:
         self.db.execute(

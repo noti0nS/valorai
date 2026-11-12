@@ -105,6 +105,7 @@ class RegistrationApi:
         if method != "POST":
             raise ApiError(404, "Página não encontrada.")
         self.throttle.hit(ip_hash)
+        self.account.audit.bind(ip_hash, self.clock.now())
         max_bytes = 3_145_728 if path in LARGE_BODY_PATHS else 16384
         payload = _read_body(header(headers, "content-type"), body, max_bytes=max_bytes)
         if path == "/api/register":

@@ -119,8 +119,6 @@ class AccountModule:
             changed.append("avatar")
         now = self.clock.now()
         updated = self.accounts.update_profile(account.id, update, changed, now)
-        if changed:
-            self.audit.record(account.id, "profile_updated", ip_hash, now)
         return updated
 
     def present_profile(self, account: Account) -> dict:
@@ -138,7 +136,7 @@ class AccountModule:
         }
 
     def deactivate(self, account: Account, password: object, sessions, confirmation, ip_hash: str) -> None:
-        """Status, then sessions, then the confirmation code, then the audit event.
+        """Status (the audit event comes from a database trigger), then sessions, then the confirmation code.
 
         These writes cannot roll back: the D1 backend treats atomic blocks as no-ops.
         """
@@ -148,7 +146,6 @@ class AccountModule:
         self.accounts.deactivate(account.id)
         sessions.revoke_all(account.id)
         confirmation.discard(account.id)
-        self.audit.record(account.id, "account_deactivated", ip_hash, self.clock.now())
 
     def prune(self, now: int) -> None:
         self.attempts.prune(lambda value: value["window"] + 900 <= now and value["blockedUntil"] <= now)
