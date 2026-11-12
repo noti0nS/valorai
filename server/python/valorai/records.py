@@ -68,6 +68,7 @@ class Transaction:
     external_ref: str | None = None
     notes: str | None = None
     created_at: int = 0
+    goal_contribution: bool = False
 
 
 @dataclass

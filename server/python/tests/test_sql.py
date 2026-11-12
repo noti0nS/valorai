@@ -138,3 +138,54 @@ def test_validation_flip_is_labelled_validated():
     db.execute("UPDATE transactions SET validated = 0 WHERE id = ?", (tx_id,))
     ledger.handle_transaction(created, {"action": "validate", "id": tx_id}, "h")
     assert _events(db)[-1] == "transaction_validated"
+
+
+def test_goal_contribution_balance_is_kept_by_triggers():
+    db, audit, _account, ledger, created = _sql_world()
+    audit.bind("h", NOW)
+    _updated, dashboard = ledger.handle_goal(created, {"target": 1000.0, "current": 100.0, "contribution": 50.0}, "h")
+    assert dashboard["goal"]["current"] == 150.0
+    tx = ledger.ledger.list_transactions(created.id)[0]
+    assert tx.goal_contribution and tx.amount_cents == 5000
+    # Editing the amount moves the balance by the difference.
+    db.execute("UPDATE transactions SET amount_cents = 8000 WHERE id = ?", (tx.id,))
+    assert _goal_cents(db, created.id) == 18000
+    # Deleting the contribution takes it back out.
+    ledger.handle_transaction(created, {"action": "delete", "id": tx.id}, "h")
+    assert _goal_cents(db, created.id) == 10000
+    # Without a recorded transaction the app still adds the contribution itself.
+    fresh = SqlAccounts(db).find_by_id(created.id)
+    ledger.handle_goal(fresh, {"contribution": 20.0, "recordTransaction": False}, "h")
+    assert _goal_cents(db, created.id) == 12000
+    assert ledger.ledger.list_transactions(created.id) == []
+
+
+def test_typing_the_aporte_marker_does_not_touch_the_goal_and_flag_is_immutable():
+    import sqlite3
+    import pytest
+    db, audit, _account, ledger, created = _sql_world()
+    audit.bind("h", NOW)
+    ledger.handle_transaction(created, {
+        "action": "create", "title": "Manual", "amount": 40.0, "kind": "variable_expense",
+        "category": "Reserva & Investimentos", "merchantDoc": "APORTE.META",
+    }, "h")
+    assert _goal_cents(db, created.id) == 0
+    tx_id = ledger.ledger.list_transactions(created.id)[0].id
+    with pytest.raises(sqlite3.DatabaseError, match="immutable"):
+        db.execute("UPDATE transactions SET goal_contribution = 1 WHERE id = ?", (tx_id,))
+
+
+def test_status_trigger_revokes_sessions_and_blocks_new_ones():
+    import sqlite3
+    import pytest
+    db, _audit, _account, _ledger, created = _sql_world()
+    sessions = SqlSessions(db)
+    sessions.insert("a", created.id, NOW, NOW, NOW + 10)
+    SqlAccounts(db).deactivate(created.id)
+    assert sessions.find("a") is None
+    with pytest.raises(sqlite3.DatabaseError, match="inactive"):
+        sessions.insert("b", created.id, NOW, NOW, NOW + 10)
+
+
+def _goal_cents(db, account_id):
+    return db.query("SELECT goal_current_cents AS c FROM accounts WHERE id = ?", (account_id,), ("c",))[0]["c"]

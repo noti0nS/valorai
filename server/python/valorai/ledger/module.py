@@ -497,26 +497,9 @@ class LedgerModule:
             raise ApiError(422, "Confira os valores da sua meta financeira.", errors)
 
         assert target_cents is not None and current_cents is not None and monthly_cents is not None
-        if contribution_cents and contribution_cents > 0:
+        record_contribution = bool(contribution_cents) and bool(payload.get("recordTransaction", True))
+        if contribution_cents and not record_contribution:
             current_cents += contribution_cents
-            if payload.get("recordTransaction", True):
-                today_iso = self.clock.today().date().isoformat()
-                tx = Transaction(
-                    id=self.ledger.next_id(),
-                    account_id=account.id,
-                    title=f"Aporte — {GOAL_LABELS.get(account.goal or 'reserve', 'Reserva Financeira')}",
-                    amount_cents=contribution_cents,
-                    kind="variable_expense",
-                    category="Reserva & Investimentos",
-                    channel="manual",
-                    occurred_on=today_iso,
-                    status="paid",
-                    payment_method="transfer",
-                    merchant_doc="APORTE.META",
-                    validated=True,
-                    created_at=self.clock.now(),
-                )
-                self.ledger.insert_transaction(tx)
 
         goal_code = payload.get("goal")
         if goal_code in GOALS and goal_code != account.goal:
@@ -528,6 +511,27 @@ class LedgerModule:
                 account.completed_at or self.clock.now(),
             )
         updated = self.accounts.update_goal_progress(account.id, target_cents, current_cents, monthly_cents)
+        if record_contribution:
+            # The balance is written first: a trigger adds the contribution when this row is inserted.
+            self.ledger.insert_transaction(
+                Transaction(
+                    id=self.ledger.next_id(),
+                    account_id=account.id,
+                    title=f"Aporte — {GOAL_LABELS.get(account.goal or 'reserve', 'Reserva Financeira')}",
+                    amount_cents=contribution_cents,
+                    kind="variable_expense",
+                    category="Reserva & Investimentos",
+                    channel="manual",
+                    occurred_on=self.clock.today().date().isoformat(),
+                    status="paid",
+                    payment_method="transfer",
+                    merchant_doc="APORTE.META",
+                    validated=True,
+                    created_at=self.clock.now(),
+                    goal_contribution=True,
+                )
+            )
+            updated = self.accounts.find_by_id(account.id) or updated
         self.audit.record(account.id, "goal_progress_updated", ip_hash, self.clock.now())
         return updated, self.present_dashboard(updated)
 
