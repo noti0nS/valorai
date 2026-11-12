@@ -42,7 +42,6 @@ class FinanceModule:
         if errors:
             raise ApiError(422, "Confira os valores e selecione um objetivo.", errors)
         updated = self.accounts.update_finance(account.id, income, expenses, goal, self.clock.now())
-        self.audit.record(account.id, "financial_profile_updated", ip_hash, self.clock.now())
         return updated
 
     def present(self, account) -> dict | None:

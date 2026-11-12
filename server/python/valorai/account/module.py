@@ -62,7 +62,6 @@ class AccountModule:
             self.accounts.insert(account)
         except LookupError:
             raise ApiError(409, "Não foi possível criar uma nova conta com esses dados. Tente entrar na conta existente.") from None
-        self.audit.record(account.id, "registration_created", ip_hash, now)
         return account
 
     def authenticate(self, identifier: object, password: object, ip_hash: str) -> Account:
@@ -95,7 +94,6 @@ class AccountModule:
         updated = self.accounts.mark_demo_confirmed(account.id)
         if updated is None:
             raise ApiError(409, "Essa etapa já foi concluída.")
-        self.audit.record(account.id, "demo_confirmation_completed", ip_hash, self.clock.now())
         return updated
 
     def update_profile(self, account: Account, payload: dict, ip_hash: str) -> Account:

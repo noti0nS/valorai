@@ -189,3 +189,14 @@ def test_status_trigger_revokes_sessions_and_blocks_new_ones():
 
 def _goal_cents(db, account_id):
     return db.query("SELECT goal_current_cents AS c FROM accounts WHERE id = ?", (account_id,), ("c",))[0]["c"]
+
+
+def test_account_lifecycle_events_come_from_triggers():
+    db, audit, _account, _ledger, created = _sql_world()
+    audit.bind("h", NOW + 1)
+    accounts = SqlAccounts(db)
+    accounts.mark_demo_confirmed(created.id)
+    accounts.update_finance(created.id, 100000, 50000, "reserve", NOW)
+    assert _events(db) == ["registration_created", "demo_confirmation_completed", "financial_profile_updated"]
+    row = db.query("SELECT ip_hash, created_at FROM audit_events WHERE event = 'financial_profile_updated'", (), ("ip_hash", "created_at"))[0]
+    assert (row["ip_hash"], row["created_at"]) == ("h", NOW + 1)
