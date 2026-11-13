@@ -1,189 +1,178 @@
+<div align="center">
+
 # ValorAI
 
-Protótipo funcional de cadastro e gestão financeira em **Astro + React** e **Django no Cloudflare Python Worker**, com a identidade visual do ValorAI e da Nulfinance Inc. (sistema de design Stitch).
+**Plataforma de gestão financeira pessoal com fluxo de cadastro, controle de gastos, metas, guias educativos e consultor financeiro por IA.**
 
-- **Acessar:** https://valorai-prototype.joselucas0303.workers.dev
-- **Arquitetura e Decisões Técnicas:** Veja [**ARCHITECTURE.md**](ARCHITECTURE.md) e os registros de arquitetura em [`docs/adr/0001-django-workers-architecture.md`](docs/adr/0001-django-workers-architecture.md) e [`docs/adr/0002-dashboard-ledger-and-stitch-workspace.md`](docs/adr/0002-dashboard-ledger-and-stitch-workspace.md).
+[![Demo](https://img.shields.io/badge/demo-workers.dev-orange?style=flat-square)](https://valorai-prototype.joselucas0303.workers.dev)
+[![Astro](https://img.shields.io/badge/Astro-7-BC52EE?style=flat-square&logo=astro&logoColor=white)](https://astro.build/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Python%20Worker%20%2B%20D1-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/)
 
-A tela inicial é o **login**. A opção **Criar conta** abre o cadastro abaixo; sessões existentes retomam o painel financeiro operacional ou a etapa pendente.
+[Acessar Demonstração](https://valorai-prototype.joselucas0303.workers.dev) · [Arquitetura](ARCHITECTURE.md) · [Registros de Decisão (ADRs)](docs/adr/)
+
+</div>
+
+---
+
+## Visão Geral
+
+O **ValorAI** é um protótipo funcional da *Nulfinance Inc.* construído sobre uma arquitetura serverless na borda (**Astro + React 19** no frontend e **Django em Cloudflare Python Worker** no backend, coordenado por um **Durable Object** com persistência em **Cloudflare D1**).
+
+O fluxo principal cobre desde o cadastro com proteção anti-bot até o painel operacional em Bento Grid:
 
 ```text
-Dados pessoais → Acesso → Confirmação simulada → Perfil financeiro → Painel Stitch (Visão Geral, Extratos, Metas e Guias)
-                                                                       ↕
-                                                       Entrar / sair / manter perfil (RF003) / lançamentos
+Login / Cadastro (Turnstile) ──▶ Confirmação (Demo Inbox) ──▶ Perfil Financeiro ──▶ Painel Stitch
+                                                                                        ├── Visão Geral + Resumo IA
+                                                                                        ├── Transações & Extratos (Manual, OFX/CSV, Comprovante IA)
+                                                                                        ├── Planejamento & Metas (Limites não bloqueantes)
+                                                                                        └── Guias Práticos (Markdown)
 ```
 
-## O que funciona
+---
 
-- Cadastro persistido: nome, CPF, nascimento, celular, CEP, UF, cidade, e-mail, senha e foto de perfil opcional (PNG/JPEG até 2 MB). Validação compartilhada entre navegador e servidor, CPF/e-mail únicos e idade mínima de 16 anos.
-- Consulta de CEP pelo ViaCEP e sugestões de municípios pelo IBGE; preenchimento manual disponível quando os serviços falham.
-- Confirmação por código de uso único em uma **caixa de demonstração**, acessível apenas à sessão da conta pendente.
-- Manutenção do perfil cadastral (**RF003**): edição de dados pessoais, endereço e avatar mantendo CPF e e-mail imutáveis.
-- Renda, gastos fixos, objetivo financeiro e metas com registro de aportes e acompanhamento de progresso.
-- **Três canais de entrada de transações**: digitação manual, importação de extratos **OFX e CSV**, e leitura de comprovantes por **OCR/IA** com revisão antes de salvar.
-- Categorização obrigatória em todos os lançamentos com sugestão automática por palavras-chave e distribuição visual por categoria.
-- Limites de gastos configuráveis por categoria e período (`diário`, `semanal`, `mensal`) com **alertas visuais não bloqueantes** ao atingir 80%, 100% ou exceder o teto.
-- Login por CPF/e-mail, sessão retomada ao recarregar, logout e desativação com revogação das sessões e preservação do histórico financeiro.
-- Três guias educativos pré-carregados por migração com leitura interativa e marcação de conclusão, sem interface administrativa.
-- Layout responsivo seguindo o design Stitch (`Visão Geral`, `Transações & Extratos`, `Planejamento & Metas`, `Guias Práticos`), campos rotulados, foco de teclado, diálogos nativos (`<dialog closedby="any">`) e respeito à preferência por movimento reduzido.
+## Funcionalidades
 
-### Limites deste recorte
+### Autenticação, Cadastro e Perfil
+- **Cadastro e validação compartilhada:** Zod no navegador ([`shared/validation.ts`](shared/validation.ts)) espelhado no servidor ([`account/validation.py`](server/python/valorai/account/validation.py)), com verificação de CPF/e-mail únicos e idade mínima de 16 anos.
+- **Preenchimento assistido de endereço:** Consulta automática de CEP via **ViaCEP** e municípios via **IBGE**, com fallback manual.
+- **Segurança de sessão:** Senhas com `bcrypt` (custo 10), cookies `HttpOnly` / `SameSite=Strict` / `Secure`, expiração por inatividade (30 min) e teto de sessão (12 h).
+- **Manutenção e desativação:** Edição de dados pessoais e avatar (JPG/PNG/WebP até 2 MB) e desativação lógica com revogação de sessões e preservação do histórico financeiro.
+- **Trilha de auditoria no banco:** Triggers genéricos SQLite gerados para D1 ([`0009_generic_audit.sql`](server/migrations/0009_generic_audit.sql)).
 
-As referências de requisitos são a ATA **v1.3** em `docs/Ata_de_Reuniao_ValorAl_v1.3.docx` e `docs/valorai_requisitos.docx`. As implementações do protótipo não alteram a ata original de 22/10/2026 nem transformam decisões técnicas provisórias em requisitos aprovados.
+### Gestão Financeira e Inteligência Artificial
+- **Três canais de lançamento:**
+  1. **Manual:** Lançamento rápido com sugestão automática de categoria por palavras-chave.
+  2. **Importação de extratos:** Leitura local de arquivos **OFX** e **CSV** com pré-visualização antes de confirmar.
+  3. **Leitura de comprovantes por IA:** Envio de foto ou captura por câmera com compressão client-side em `<canvas>`, extração multimodal (NFC-e, PIX, boletos, faturas) via API compatível com OpenAI e revisão humana obrigatória antes de salvar.
+- **10 categorias padronizadas** e cálculo automático de comprometimento entre renda, gastos fixos, variáveis e saldo livre.
+- **Limites e metas:** Tetos configuráveis por categoria, diário ou proporção de cartão com **alertas visuais não bloqueantes** (80%, 100% e excedido), além de registro de aportes em metas.
+- **Consultor financeiro por IA (`POST /api/ai/summary`):**
+  - Recebe apenas métricas condensadas e livres de PII, guiadas por estados determinísticos (`EXPENSE_RATIO_HIGH`, `LIMIT_EXCEEDED`, `NEAR_LIMIT`, `POSITIVE_SURPLUS`, `NO_LIMITS_SET`, `LOW_ACTIVITY`).
+  - Cache em `DurableKv` com **janela de verificação de 3 dias** e revalidação por **premissas materiais** (mudança de estado, objetivo, categoria líder, status de alerta ou variação `>= 15%` em renda/despesas) — evitando chamadas desnecessárias à LLM a cada movimentação.
+  - Fallback determinístico local automático quando a IA não está configurada ou o circuit breaker (HTTP 429) está ativo.
+- **Interface acessível:** Tema claro/escuro sincronizado com `prefers-color-scheme`, diálogos nativos (`<dialog closedby="any">`), animações numéricas (`NumberFlow`) e respeito a `prefers-reduced-motion`.
 
-| Requisito de trabalho | Cobertura no protótipo |
-| --- | --- |
-| RF001 — Cadastro | Fluxo inicial e persistência |
-| RF002 — Confirmação de e-mail | Simulação autorizada; não verifica titularidade |
-| RF003 — Manutenção cadastral | Edição de dados pessoais, endereço e avatar (CPF e e-mail imutáveis) |
-| RF004 — Perfil financeiro | Renda, gastos fixos, objetivo e metas |
-| RF005 — Desativação | Exclusão lógica; dados financeiros preservados e sessões revogadas |
-| RF006/RF007 — Login/sessões | Login, timeout, retomada e logout |
-| RF008 — Recuperação de senha | Pendente |
-| Gestão Financeira (Dashboard) | Lançamentos (manual, OFX/CSV, recibo OCR), categorias, limites com alertas não bloqueantes, aportes em metas e progresso nos guias |
+---
 
-A diferença entre renda e gastos fixos e o saldo projetado no painel são instrumentos de planejamento, não saldo bancário sincronizado via Open Finance. A opção “Começar a investir” é apenas um objetivo, sem perfil de investidor ou recomendação financeira.
+## Arquitetura e Stack
 
-## Confirmação demonstrativa
+```text
+Navegador ──▶ Cloudflare Static Assets (Astro + React 19 + Instrument Sans)
+          └──▶ /api/* ──▶ Python Worker (Django WSGI)
+                             └──▶ AuthCoordinator (Singleton Durable Object)
+                                    ├── D1 (SQLite): contas, sessões, transações, limites, metas, guias, auditoria
+                                    ├── DurableKv (module_kv): códigos, cooldowns, cache do resumo IA, circuit breaker
+                                    ├── Turnstile: verificação anti-bot em produção
+                                    └── OpenAI-Compatible API: extração de comprovantes e resumo financeiro
+```
 
-Nenhum e-mail é enviado. O hostname gratuito `workers.dev` hospeda o site, mas não fornece um domínio remetente de e-mail. A conta fica com status `demo_confirmed`; a API mantém `emailVerified: false`.
+| Camada | Tecnologias |
+| :--- | :--- |
+| **Frontend** | Astro 7, React 19, TypeScript, Zod, Motion, Lucide, `@number-flow/react` |
+| **Backend** | Python 3.14, Django (WSGI síncrono em Cloudflare Python Worker via `pywrangler`) |
+| **Dados & Coordenação** | Cloudflare D1 (SQLite), Durable Object (`AuthCoordinator`), `DurableKv` |
+| **Segurança** | Cloudflare Turnstile, `bcrypt` (custo 10), cookies `HttpOnly` + `SameSite=Strict` |
+| **IA** | Endpoint compatível com OpenAI (padrão `gemini-3.5-flash-lite`) + fallback determinístico |
+| **Testes** | `pytest` (backend em memória), `tsx --test` (Zod/validação), Playwright (E2E) |
 
-Parâmetros **provisórios**, ainda sujeitos à validação do RF002:
+---
 
-- Código: seis dígitos, validade de 10 minutos, até cinco tentativas.
-- Reenvio: intervalo de 60 segundos e até três emissões por hora, incluindo a inicial.
+## Como Executar Localmente
 
-Use dados fictícios e uma senha exclusiva para teste. A desativação preserva dados; reativação, retenção e exclusão definitiva continuam pendentes. Esta demonstração não estabelece conformidade LGPD.
+### Pré-requisitos
+- **Node.js** `^22.23 || ^24.22 || ^26.12`
+- **Python 3.14+** e [**uv**](https://docs.astral.sh/uv/) (ou **Docker Compose**)
 
-## Executar localmente
+### Opção 1: Docker Compose (Recomendado)
 
-### Com Docker Compose (Recomendado)
-
-Suba todos os recursos do ecossistema local (API Django no Python Worker, banco D1 local, Durable Object coordenador e Frontend Astro) prontos para teste com um comando:
-
-```powershell
+```bash
 docker compose up --build
 ```
 
-- **Aplicação Completa (Worker + Assets + D1):** [http://localhost:8787](http://localhost:8787)
-- **Frontend com Hot-Reload (Astro Dev Server):** [http://localhost:4321](http://localhost:4321) (encaminha `/api` para o Worker)
-- **Bateria de testes automatizados no Docker:**
-  ```powershell
+- **Aplicação completa (Worker + D1 + Assets):** `http://localhost:8787`
+- **Frontend com Hot-Reload (Astro):** `http://localhost:4321` (com proxy `/api` para o Worker)
+- **Executar testes no container:**
+  ```bash
   docker compose run --rm test
   ```
-- **Encerrar containers:**
-  ```powershell
-  docker compose down
-  # ou limpe os volumes persistidos do D1:
-  docker compose down -v
-  ```
 
-### Sem Docker (Manual)
+### Opção 2: Execução Manual
 
-Requisitos: **Node 24.22+ na linha 24.x**, npm e navegador moderno. As outras linhas aceitas pelo CLI estão em `engines`. Instale as dependências fixadas nos lockfiles:
+1. **Instale as dependências e compile o frontend:**
+   ```bash
+   npm ci
+   npm run build
+   ```
+2. **Inicie a API local** (aplica automaticamente as migrações no D1 local e sobe o Worker na porta `8787`):
+   ```bash
+   npm run dev:api
+   ```
+3. *(Opcional)* Em outro terminal, inicie o servidor Astro com HMR para desenvolvimento de UI:
+   ```bash
+   npm run dev
+   ```
 
-```powershell
-npm ci
-npm run build
-```
+> **Modo de desenvolvimento:** com `ENVIRONMENT=development` (padrão local), o Turnstile é ignorado. Para habilitar IA localmente, configure `AI_API_KEY` em `server/python/.dev.vars`. Sem `AI_API_KEY`, o sistema opera normalmente usando extração heurística e resumo determinístico.
 
-Inicialize o D1 **local** a partir de `server/python`:
+---
 
-```powershell
-cd server/python
-uv run pywrangler d1 migrations apply valorai-prototype --local
-```
+## Testes e Verificações
 
-Na raiz, inicie a API e os assets compilados:
-
-```powershell
-npm run dev:api
-```
-
-Abra **http://127.0.0.1:8787**. O estado local fica em `server/python/.wrangler/`, separado do banco remoto. Para editar o frontend com atualização automática, rode também `npm run dev` em outro terminal e abra o endereço exibido pelo Astro; `/api` é encaminhado ao Worker local. O modo de desenvolvimento dispensa Turnstile, sem credenciais de produção.
-
-### Verificações
-
-```powershell
+```bash
+# Typecheck do frontend e contratos compartilhados
 npm run check
+
+# Testes unitários de validação (Zod)
 npm test
-npx playwright install chromium
+
+# Testes unitários e de integração do backend (SQLite em memória + fakes)
+uv run --directory server/python pytest
+
+# Testes E2E com Playwright (requer `npm run build` e `npm run dev:api` ativos)
+npx playwright install chromium   # apenas na primeira vez
 npm run test:e2e
 ```
 
-Os testes de navegador usam a API local em `127.0.0.1:8787`, que precisa estar iniciada e com as migrações aplicadas. **Execute `npm run build` após alterar o frontend**, pois os testes acessam `dist/`, não o servidor Astro. Os testes criam dados sintéticos no banco local; não apontam para produção. Capturas são gravadas em `test-results/`, ignorado pelo Git. ViaCEP e IBGE são substituídos por respostas determinísticas somente nos testes.
+---
 
-Os testes cobrem validação, cadastro, confirmação, persistência, edição financeira, login/desativação, isolamento de sessão, origem das requisições e códigos de uso único. A suíte local não valida desafios reais do Turnstile.
+## Deploy (Cloudflare)
 
-Verificação em 29/10/2026, após o redesign: cinco testes de validação e dois de integração passaram; build e checagem de tipos passaram. Na publicação, o HTML correspondeu ao build local, os assets referenciados pela página retornaram HTTP 200 e a caixa demo rejeitou acesso anônimo. O desafio real do Turnstile não foi concluído pelos navegadores automatizados; o cadastro completo em produção ainda precisa de conferência manual.
+As configurações de bindings (`D1`, `Durable Objects` e variáveis públicas) ficam em [`server/python/wrangler.jsonc`](server/python/wrangler.jsonc). Os segredos (`TURNSTILE_SECRET_KEY` e `AI_API_KEY`) devem ser configurados via Wrangler secrets — nunca no repositório.
 
-## Cloudflare
-
-```text
-Navegador → Static Assets: HTML Astro, React, fontes e logos
-          → /api/*: Python Worker → AuthCoordinator (Durable Object)
-                                ├── D1: contas, sessões, perfis e guias
-                                ├── Estado temporário: códigos e limites
-                                └── Turnstile: validação de cadastro/login
-```
-
-O coordenador único serializa as operações de autenticação e executa bcrypt com custo 10. É uma escolha para o volume do protótipo; não é uma arquitetura de autenticação dimensionada para tráfego elevado. Os cookies são `HttpOnly`, `SameSite=Strict` e `Secure` em HTTPS; D1 guarda apenas hashes dos tokens de sessão. Expiração: 30 minutos de inatividade e teto de 12 horas. Dados autenticados usam `Cache-Control: no-store`.
-
-### Recursos com faixa gratuita usados
-
-Limites de referência consultados em **29/10/2026**, compartilhados com os demais projetos da conta:
-
-| Recurso | Uso | Faixa gratuita de referência |
-| --- | --- | --- |
-| Workers Static Assets | Site, fontes e logos na CDN | Requisições estáticas gratuitas e ilimitadas |
-| Workers | API e hostname HTTPS `workers.dev` | 100 mil requisições/dia; 10 ms de CPU por invocação do Worker |
-| D1 | Contas, perfis, sessões, auditoria e guias | 5 milhões de linhas lidas/dia; 100 mil escritas/dia; 5 GB totais |
-| Durable Objects SQLite | Coordenação, bcrypt, códigos, limitação de tentativas e limpeza por alarme | 100 mil requisições/dia; 13 mil GB-s/dia; armazenamento com cotas próprias |
-| Turnstile | Proteção de cadastro e login | Desafios ilimitados no plano gratuito |
-| Workers Logs | Observabilidade amostrada em 10% | 200 mil eventos/dia; retenção de três dias |
-
-Nenhum plano pago foi ativado por este projeto. O uso gratuito depende das cotas e do plano efetivo da conta. No Workers Free, exceder os limites pode interromper operações. R2, Workers AI, Queues e KV não têm integração neste fluxo de cadastro; a extração de recibos e o processamento de importações exigirão uma etapa própria.
-
-Fontes: [Workers e logs](https://developers.cloudflare.com/workers/platform/pricing/), [D1](https://developers.cloudflare.com/d1/platform/pricing/), [Durable Objects](https://developers.cloudflare.com/durable-objects/platform/pricing/), [Turnstile](https://developers.cloudflare.com/turnstile/plans/).
-
-### Publicar
-
-`server/python/wrangler.jsonc` identifica o Worker `valorai-prototype`, o D1 e o ambiente de produção. A credencial secreta do Turnstile fica no Worker como `TURNSTILE_SECRET_KEY` e não entra no repositório. A site key pública está no ambiente `production`. Para outra conta, crie os recursos correspondentes e atualize esses identificadores.
-
-Autentique o CLI usado pelo `pywrangler`. O `npm run deploy` já aplica as migrações **remotas** antes de publicar; para aplicá-las sem publicar, em `server/python`:
-
-```powershell
-uv run pywrangler d1 migrations apply valorai-prototype --remote
-```
-
-Depois, na raiz:
-
-```powershell
+```bash
 npm run deploy
 ```
 
-Esse script executa o build do Astro e `pywrangler deploy --env production`. Não publique com `ENVIRONMENT=development`.
+O script executa `astro build`, aplica as migrações pendentes no D1 remoto (`--remote`) e publica o Worker no ambiente `production`.
 
-Após publicar, confira o site, `/api/config`, a presença do Turnstile e um cadastro sintético no navegador. Um envio sem token válido deve ser rejeitado pela API.
+---
 
-## Estrutura e referência visual
+## Estrutura do Projeto
 
 ```text
-ARCHITECTURE.md            Visão geral da arquitetura, módulos, banco D1 e rotas da API
-assets/                    Logos originais
-.stitch/                   Sistema de design Stitch (DESIGN.md) e telas de referência
-src/pages/index.astro      Página, metadados e hidratação
-src/components/            Fluxo React de cadastro (RegistrationApp) e painel Stitch (DashboardWorkspace)
-src/styles/                Identidade visual, Bento grid e responsividade
-shared/validation.ts       Validações, categorias e objetivos compartilhados
-server/python/             API Django no Python Worker (Account, Session, Confirmation, Finance, Ledger)
-server/migrations/         Esquema D1 (0001_initial.sql e 0002_dashboard_ledger.sql) e conteúdo educativo
-tests/                     Validações e suíte E2E de navegador/API (Playwright)
-docs/                      Atas, requisitos e ADRs (docs/adr/)
+.
+├── assets/                 # Logotipos oficiais (ValorAI e Nulfinance Inc.)
+├── docs/                   # Requisitos (valorai_requisitos.docx), PRDs e ADRs (docs/adr/)
+├── shared/                 # Schemas Zod, categorias e regras compartilhadas (TS)
+├── src/
+│   ├── components/         # RegistrationApp, DashboardWorkspace, Turnstile e tema
+│   ├── pages/              # Entrada Astro (index.astro)
+│   └── styles/             # Design tokens (claro/escuro) e layout Bento Grid
+├── server/
+│   ├── migrations/         # Migrações SQL do D1 (0001 a 0010)
+│   ├── tools/              # Gerador de triggers genéricos de auditoria
+│   └── python/
+│       ├── valorai/        # Domínio (account, session, confirmation, finance, ledger, ai)
+│       └── tests/          # Suíte pytest (42 testes)
+└── tests/                  # Testes de validação (tsx) e E2E (Playwright)
 ```
 
-Para detalhes completos da topologia de execução no Cloudflare, módulos de domínio, esquema de dados e histórico de decisões arquiteturais, consulte [**ARCHITECTURE.md**](ARCHITECTURE.md), [**ADR 0001**](docs/adr/0001-django-workers-architecture.md) e [**ADR 0002**](docs/adr/0002-dashboard-ledger-and-stitch-workspace.md).
+---
 
-Redesign de 29/10/2026 e Painel Stitch de 10/11/2026: paleta derivada da marca (sálvia `#7E9F8C`, esmeralda `#14281D` e grafite `#242830`), fonte Instrument Sans hospedada junto ao site, textos com tamanho mínimo de 12 px e contraste adequado. Após o login e confirmação, o usuário acessa o painel operacional em Bento Grid (`DashboardWorkspace.tsx`) com suporte aos três canais de lançamento, limites e alertas não bloqueantes, metas e guias educativos.
+## Documentação e Limites do Protótipo
 
-O **FGL MCP** (https://fglibs.com/mcp) indicou a [NumberFlow](https://github.com/barvian/number-flow), usada para animar os valores do perfil financeiro; o valor formatado também é exposto como texto para leitores de tela. A [Arc Library](https://github.com/kuratlielia/arc-library), encontrada pelo mesmo catálogo, serviu de referência inicial para etapas e cartões de seleção. A interface usa implementação própria em React, `motion` e Lucide.
+- **Arquitetura detalhada:** [`ARCHITECTURE.md`](ARCHITECTURE.md) e ADRs [`0001`](docs/adr/0001-django-workers-architecture.md) a [`0007`](docs/adr/0007-openai-compatible-ai-integration.md).
+- **Confirmação de e-mail simulada (`EMAIL_MODE=demo`):** nenhum e-mail real é enviado; o código de verificação fica disponível em `/api/demo-inbox` apenas para a sessão da conta pendente.
+- **Escopo financeiro:** o painel é uma ferramenta de planejamento pessoal e não realiza sincronização bancária via Open Finance nem recomendações de investimento.
+- **Dados de teste:** utilize dados fictícios no ambiente de demonstração.
