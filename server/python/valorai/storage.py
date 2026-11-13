@@ -119,6 +119,9 @@ class MemoryAudit:
     def record(self, account_id: str | None, event: str, ip_hash: str, created_at: int) -> None:
         self.events.append((account_id, event, ip_hash, created_at))
 
+    def bind(self, ip_hash: str, now: int) -> None:
+        """Memory stores have no triggers, so there is no request context to bind."""
+
 
 class MemoryLessons:
     def __init__(self, lessons: list[dict] | None = None):
@@ -385,8 +388,14 @@ class SqlSessions:
 
 
 class SqlAudit:
+    """Identity events are recorded here; data-change events come from triggers (migration 0003)."""
+
     def __init__(self, db: SqliteDb):
         self.db = db
+
+    def bind(self, ip_hash: str, now: int) -> None:
+        """Give the audit triggers the IP hash and clock of the current request."""
+        self.db.execute("UPDATE audit_context SET ip_hash = ?, at = ? WHERE id = 1", (ip_hash, now))
 
     def record(self, account_id: str | None, event: str, ip_hash: str, created_at: int) -> None:
         self.db.execute(
@@ -413,7 +422,7 @@ ACCOUNT_COLUMNS = (
 TRANSACTION_COLUMNS = (
     "id", "account_id", "title", "amount_cents", "kind", "category", "channel",
     "occurred_on", "status", "payment_method", "merchant_doc", "confidence",
-    "validated", "external_ref", "notes", "created_at",
+    "validated", "external_ref", "notes", "created_at", "goal_contribution",
 )
 
 LIMIT_COLUMNS = (
@@ -440,6 +449,7 @@ def transaction_from(row) -> Transaction:
         external_ref=data.get("external_ref"),
         notes=data.get("notes"),
         created_at=int(data["created_at"]),
+        goal_contribution=bool(data.get("goal_contribution", 0)),
     )
 
 
@@ -519,7 +529,8 @@ class SqlLedger:
     def list_transactions(self, account_id: str) -> list[Transaction]:
         rows = self.db.query(
             """SELECT id, account_id, title, amount_cents, kind, category, channel, occurred_on,
-                      status, payment_method, merchant_doc, confidence, validated, external_ref, notes, created_at
+                      status, payment_method, merchant_doc, confidence, validated, external_ref, notes, created_at,
+                      goal_contribution
                FROM transactions
                WHERE account_id = ?
                ORDER BY occurred_on DESC, created_at DESC, id DESC""",
@@ -531,7 +542,8 @@ class SqlLedger:
     def find_transaction(self, account_id: str, tx_id: str) -> Transaction | None:
         rows = self.db.query(
             """SELECT id, account_id, title, amount_cents, kind, category, channel, occurred_on,
-                      status, payment_method, merchant_doc, confidence, validated, external_ref, notes, created_at
+                      status, payment_method, merchant_doc, confidence, validated, external_ref, notes, created_at,
+                      goal_contribution
                FROM transactions
                WHERE account_id = ? AND id = ?""",
             (account_id, tx_id),
@@ -551,12 +563,14 @@ class SqlLedger:
         self.db.execute(
             """INSERT INTO transactions(
                  id, account_id, title, amount_cents, kind, category, channel, occurred_on,
-                 status, payment_method, merchant_doc, confidence, validated, external_ref, notes, created_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 status, payment_method, merchant_doc, confidence, validated, external_ref, notes, created_at,
+                 goal_contribution
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 tx.id, tx.account_id, tx.title, tx.amount_cents, tx.kind, tx.category, tx.channel,
                 tx.occurred_on, tx.status, tx.payment_method, tx.merchant_doc, tx.confidence,
                 1 if tx.validated else 0, tx.external_ref, tx.notes, tx.created_at,
+                1 if tx.goal_contribution else 0,
             ),
         )
         return tx

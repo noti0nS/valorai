@@ -308,7 +308,6 @@ class LedgerModule:
                 raise ApiError(422, "Identifique o lançamento para excluir.", {"id": "Lançamento inválido."})
             if not self.ledger.delete_transaction(account.id, tx_id):
                 raise ApiError(404, "Lançamento não encontrado.")
-            self.audit.record(account.id, "transaction_deleted", ip_hash, self.clock.now())
             return self.present_dashboard(account)
         if action == "validate":
             tx_id = payload.get("id")
@@ -319,7 +318,6 @@ class LedgerModule:
             cat = new_category.strip() if isinstance(new_category, str) and new_category.strip() else existing.category
             updated = replace(existing, validated=True, category=cat[:60])
             self.ledger.update_transaction(updated)
-            self.audit.record(account.id, "transaction_validated", ip_hash, self.clock.now())
             return self.present_dashboard(account)
         if action == "toggle_status":
             tx_id = payload.get("id")
@@ -329,7 +327,6 @@ class LedgerModule:
             next_status = "paid" if existing.status == "pending" else "pending"
             updated = replace(existing, status=next_status)
             self.ledger.update_transaction(updated)
-            self.audit.record(account.id, "transaction_status_toggled", ip_hash, self.clock.now())
             return self.present_dashboard(account)
 
         tx = self._validate_transaction_payload(account, payload)
@@ -345,10 +342,8 @@ class LedgerModule:
                 external_ref=existing.external_ref,
             )
             self.ledger.update_transaction(updated)
-            self.audit.record(account.id, "transaction_updated", ip_hash, self.clock.now())
         else:
             self.ledger.insert_transaction(tx)
-            self.audit.record(account.id, "transaction_created", ip_hash, self.clock.now())
         return self.present_dashboard(account)
 
     def handle_import(self, account: Account, payload: dict, ip_hash: str) -> dict:
@@ -404,7 +399,6 @@ class LedgerModule:
             self.ledger.insert_transaction(tx)
             imported_count += 1
 
-        self.audit.record(account.id, "transactions_imported", ip_hash, now)
         dashboard = self.present_dashboard(account)
         dashboard["importResult"] = {
             "importedCount": imported_count,
@@ -428,7 +422,6 @@ class LedgerModule:
             }
             tx = self._validate_transaction_payload(account, merged)
             self.ledger.insert_transaction(tx)
-            self.audit.record(account.id, "receipt_transaction_saved", ip_hash, self.clock.now())
             return self.present_dashboard(account)
 
         file_name = str(payload.get("fileName") or "comprovante-nfce.jpg").strip()
@@ -448,7 +441,6 @@ class LedgerModule:
             if not isinstance(limit_id, str) or not limit_id:
                 raise ApiError(422, "Identifique o limite para remover.")
             self.ledger.delete_limit(account.id, limit_id)
-            self.audit.record(account.id, "budget_limit_deleted", ip_hash, self.clock.now())
             return self.present_dashboard(account)
 
         scope = str(payload.get("scope") or "category")
@@ -482,7 +474,6 @@ class LedgerModule:
             created_at=self.clock.now(),
         )
         self.ledger.upsert_limit(limit)
-        self.audit.record(account.id, "budget_limit_updated", ip_hash, self.clock.now())
         return self.present_dashboard(account)
 
     def handle_goal(self, account: Account, payload: dict, ip_hash: str) -> tuple[Account, dict]:
@@ -506,26 +497,9 @@ class LedgerModule:
             raise ApiError(422, "Confira os valores da sua meta financeira.", errors)
 
         assert target_cents is not None and current_cents is not None and monthly_cents is not None
-        if contribution_cents and contribution_cents > 0:
+        record_contribution = bool(contribution_cents) and bool(payload.get("recordTransaction", True))
+        if contribution_cents and not record_contribution:
             current_cents += contribution_cents
-            if payload.get("recordTransaction", True):
-                today_iso = self.clock.today().date().isoformat()
-                tx = Transaction(
-                    id=self.ledger.next_id(),
-                    account_id=account.id,
-                    title=f"Aporte — {GOAL_LABELS.get(account.goal or 'reserve', 'Reserva Financeira')}",
-                    amount_cents=contribution_cents,
-                    kind="variable_expense",
-                    category="Reserva & Investimentos",
-                    channel="manual",
-                    occurred_on=today_iso,
-                    status="paid",
-                    payment_method="transfer",
-                    merchant_doc="APORTE.META",
-                    validated=True,
-                    created_at=self.clock.now(),
-                )
-                self.ledger.insert_transaction(tx)
 
         goal_code = payload.get("goal")
         if goal_code in GOALS and goal_code != account.goal:
@@ -537,6 +511,27 @@ class LedgerModule:
                 account.completed_at or self.clock.now(),
             )
         updated = self.accounts.update_goal_progress(account.id, target_cents, current_cents, monthly_cents)
+        if record_contribution:
+            # The balance is written first: a trigger adds the contribution when this row is inserted.
+            self.ledger.insert_transaction(
+                Transaction(
+                    id=self.ledger.next_id(),
+                    account_id=account.id,
+                    title=f"Aporte — {GOAL_LABELS.get(account.goal or 'reserve', 'Reserva Financeira')}",
+                    amount_cents=contribution_cents,
+                    kind="variable_expense",
+                    category="Reserva & Investimentos",
+                    channel="manual",
+                    occurred_on=self.clock.today().date().isoformat(),
+                    status="paid",
+                    payment_method="transfer",
+                    merchant_doc="APORTE.META",
+                    validated=True,
+                    created_at=self.clock.now(),
+                    goal_contribution=True,
+                )
+            )
+            updated = self.accounts.find_by_id(account.id) or updated
         self.audit.record(account.id, "goal_progress_updated", ip_hash, self.clock.now())
         return updated, self.present_dashboard(updated)
 
