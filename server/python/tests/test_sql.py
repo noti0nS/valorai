@@ -218,3 +218,50 @@ def test_account_lifecycle_events_come_from_triggers():
     assert _events(db) == ["registration_created", "demo_confirmation_completed", "financial_profile_updated"]
     row = db.query("SELECT ip_hash, created_at FROM audit_events WHERE event = 'financial_profile_updated'", (), ("ip_hash", "created_at"))[0]
     assert (row["ip_hash"], row["created_at"]) == ("h", NOW + 1)
+
+
+def test_views_aggregate_financial_summary_and_monthly_category_spending():
+    db, audit, _account, ledger, created = _sql_world()
+    audit.bind("h", NOW + 1)
+    ledger.handle_transaction(created, {
+        "action": "create", "title": "Salário", "amount": 3000.0, "kind": "income",
+        "category": "Renda", "occurredOn": "2026-10-05", "status": "paid",
+    }, "h")
+    ledger.handle_transaction(created, {
+        "action": "create", "title": "Mercado", "amount": 250.0, "kind": "variable_expense",
+        "category": "Alimentação & Mercado", "occurredOn": "2026-10-10", "status": "paid",
+    }, "h")
+    ledger.handle_transaction(created, {
+        "action": "create", "title": "Feira", "amount": 50.0, "kind": "variable_expense",
+        "category": "Alimentação & Mercado", "occurredOn": "2026-10-15", "status": "pending",
+    }, "h")
+    ledger.handle_limit(created, {
+        "action": "upsert", "scope": "category", "category": "Alimentação & Mercado", "limit": 600.0,
+    }, "h")
+
+    summary = db.query(
+        "SELECT account_id, transaction_count, total_income_cents, total_expense_cents, pending_expense_cents "
+        "FROM v_account_financial_summary WHERE account_id = ?",
+        (created.id,),
+    )[0]
+    assert summary == {
+        "account_id": created.id,
+        "transaction_count": 3,
+        "total_income_cents": 300000,
+        "total_expense_cents": 30000,
+        "pending_expense_cents": 5000,
+    }
+
+    spending = db.query(
+        "SELECT year_month, category, expense_count, spent_cents, limit_cents, limit_usage_percent "
+        "FROM v_monthly_category_spending WHERE account_id = ?",
+        (created.id,),
+    )[0]
+    assert spending == {
+        "year_month": "2026-10",
+        "category": "Alimentação & Mercado",
+        "expense_count": 2,
+        "spent_cents": 30000,
+        "limit_cents": 60000,
+        "limit_usage_percent": 50.0,
+    }
