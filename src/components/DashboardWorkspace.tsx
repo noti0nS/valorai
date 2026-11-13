@@ -7,7 +7,7 @@ import {
   BellRing, ArrowRight, Trash2, Sparkles,
   Search, CircleAlert, X, Target,
   LayoutGrid, ReceiptText, ChevronDown, UserRound,
-  SlidersHorizontal, Info, LogOut, UserX, Check, KeyRound
+  SlidersHorizontal, Info, LogOut, UserX, Check, KeyRound, ClipboardPaste
 } from 'lucide-react';
 import { CompanyMark, ProductMark } from './BrandMark';
 import { ThemeToggle } from './ThemeToggle';
@@ -825,6 +825,91 @@ export default function DashboardWorkspace({
     setReceiptFileName('foto-camera.jpg');
     setReceiptPreviewUrl(dataUrl);
     await handleExtractReceipt(undefined, 'foto-camera.jpg', receiptHint, dataUrl);
+  }
+
+  useEffect(() => {
+    if (activeModal !== 'receipt' || receiptScanning || extractedReceipt) return;
+
+    function handlePaste(e: ClipboardEvent) {
+      if (actionBusy) return;
+      let imageFile: File | null = null;
+      const items = e.clipboardData?.items;
+      if (items) {
+        for (const item of Array.from(items)) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+              imageFile = file;
+              break;
+            }
+          }
+        }
+      }
+      if (!imageFile && e.clipboardData?.files) {
+        for (const file of Array.from(e.clipboardData.files)) {
+          if (file.type.startsWith('image/')) {
+            imageFile = file;
+            break;
+          }
+        }
+      }
+
+      if (imageFile) {
+        e.preventDefault();
+        const ext = imageFile.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+        const fileName = imageFile.name && imageFile.name !== 'image.png'
+          ? imageFile.name
+          : `comprovante-colado.${ext}`;
+        const normalizedFile = imageFile.name === fileName
+          ? imageFile
+          : new File([imageFile], fileName, { type: imageFile.type });
+        stopCamera();
+        void processReceiptFile(normalizedFile);
+        return;
+      }
+
+      const target = e.target;
+      if (
+        target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+      setModalError('Nenhuma imagem encontrada na área de transferência. Copie uma imagem e tente novamente.');
+    }
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [activeModal, receiptScanning, extractedReceipt, actionBusy]);
+
+  async function pasteFromClipboard() {
+    setModalError('');
+    if (!navigator.clipboard?.read) {
+      setModalError('Seu navegador não suporta colar pelo botão. Pressione Ctrl+V (ou Cmd+V) com a imagem copiada.');
+      return;
+    }
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+          const file = new File([blob], `comprovante-colado.${ext}`, { type: imageType });
+          stopCamera();
+          await processReceiptFile(file);
+          return;
+        }
+      }
+      setModalError('Nenhuma imagem encontrada na área de transferência. Copie uma imagem ou captura de tela e tente novamente.');
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        setModalError('Permissão da área de transferência negada. Pressione Ctrl+V para colar a imagem.');
+      } else {
+        setModalError('Não foi possível ler a área de transferência. Tente pressionar Ctrl+V.');
+      }
+    }
   }
 
   function resetReceiptFlow() {
@@ -2405,7 +2490,7 @@ export default function DashboardWorkspace({
                     style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
                   >
                     <p>
-                      Tire uma foto ou envie o arquivo de qualquer comprovante (cupom fiscal NFC-e/SAT, PIX, boleto, fatura de cartão ou maquininha). A IA identifica o valor pago, data e sugere a categoria para sua confirmação.
+                      Tire uma foto, envie o arquivo ou cole com Ctrl+V a imagem de qualquer comprovante (cupom fiscal NFC-e/SAT, PIX, boleto, fatura de cartão ou maquininha). A IA identifica o valor pago, data e sugere a categoria para sua confirmação.
                     </p>
                     {aiEnabled && aiTier === 'free_prototype' && (
                       <p className="field-hint">
@@ -2429,7 +2514,7 @@ export default function DashboardWorkspace({
                       <button
                         type="button"
                         className="button button-primary"
-                        style={{ flex: 1, justifyContent: 'center' }}
+                        style={{ flex: '1 1 140px', justifyContent: 'center' }}
                         onClick={() => void (cameraActive ? stopCamera() : startCamera())}
                         disabled={actionBusy}
                       >
@@ -2453,11 +2538,22 @@ export default function DashboardWorkspace({
                       <label
                         htmlFor="receiptFileInput"
                         className="button button-secondary"
-                        style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }}
+                        style={{ cursor: 'pointer', flex: '1 1 140px', justifyContent: 'center' }}
                       >
                         <FileUp size={18} aria-hidden="true" />
                         <span>Enviar arquivo</span>
                       </label>
+
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        style={{ flex: '1 1 140px', justifyContent: 'center' }}
+                        onClick={() => void pasteFromClipboard()}
+                        disabled={actionBusy}
+                      >
+                        <ClipboardPaste size={18} aria-hidden="true" />
+                        <span>Colar (Ctrl+V)</span>
+                      </button>
                     </div>
 
                     <AnimatePresence initial={false}>
@@ -2504,7 +2600,7 @@ export default function DashboardWorkspace({
                     {!cameraActive && (
                       <>
                         <small className="field-hint">
-                          Formatos suportados: JPG, PNG, WebP ou PDF • Redimensionamento automático no celular
+                          Formatos suportados: JPG, PNG, WebP ou PDF • Pressione Ctrl+V para colar uma imagem • Redimensionamento automático no celular
                         </small>
 
                         <div className="sample-presets">
