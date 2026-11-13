@@ -6,7 +6,7 @@ import {
   Utensils, HeartPulse, Zap, ArrowDownLeft, PiggyBank, Tags, TrendingUp, Clock3,
   BellRing, ArrowRight, Trash2, Sparkles,
   Search, CircleAlert, X, Target,
-  LayoutGrid, ReceiptText, ScanLine, ChevronDown, UserRound,
+  LayoutGrid, ReceiptText, ChevronDown, UserRound,
   SlidersHorizontal, Info, LogOut, UserX, Check
 } from 'lucide-react';
 import { CompanyMark, ProductMark } from './BrandMark';
@@ -579,6 +579,10 @@ export default function DashboardWorkspace({
     fallbackReason?: string;
   } | null>(null);
   const [receiptConfirmedCheck, setReceiptConfirmedCheck] = useState(true);
+  const [cameraActive, setCameraActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraFallbackRef = useRef<HTMLInputElement | null>(null);
 
   // Home AI Summary State
   const [aiSummaryOverride, setAiSummaryOverride] = useState<AiSummaryData | null>(null);
@@ -720,6 +724,76 @@ export default function DashboardWorkspace({
       setTxNotes('');
     }
     setActiveModal('manual');
+  }
+
+  function stopCamera() {
+    if (cameraStreamRef.current) {
+      for (const track of cameraStreamRef.current.getTracks()) {
+        track.stop();
+      }
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  }
+
+  useEffect(() => {
+    if (activeModal !== 'receipt') {
+      stopCamera();
+    }
+  }, [activeModal]);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, []);
+
+  useEffect(() => {
+    if (cameraActive && videoRef.current && cameraStreamRef.current) {
+      videoRef.current.srcObject = cameraStreamRef.current;
+      void videoRef.current.play().catch(() => {});
+    }
+  }, [cameraActive]);
+
+  async function startCamera() {
+    setModalError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      cameraFallbackRef.current?.click();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      setCameraActive(true);
+    } catch {
+      setModalError('Não foi possível acessar a câmera. Verifique a permissão ou use "Enviar arquivo".');
+    }
+  }
+
+  async function captureCameraPhoto() {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const maxDimension = 1280;
+    const scale = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight));
+    const width = Math.max(1, Math.round(video.videoWidth * scale));
+    const height = Math.max(1, Math.round(video.videoHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, width, height);
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+    if (dataUrl.length > 480_000) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.62);
+    }
+    stopCamera();
+    setReceiptFileName('foto-camera.jpg');
+    await handleExtractReceipt(undefined, 'foto-camera.jpg', receiptHint, dataUrl);
   }
 
   function openReceiptModal() {
@@ -877,6 +951,20 @@ export default function DashboardWorkspace({
     } finally {
       setActionBusy(false);
     }
+  }
+
+  async function processReceiptFile(file: File) {
+    setReceiptFileName(file.name);
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressed = await compressReceiptImage(file);
+        await handleExtractReceipt(undefined, file.name, receiptHint, compressed);
+        return;
+      } catch {
+        // Fallback to filename/hint extraction if browser fails to decode image
+      }
+    }
+    await handleExtractReceipt(undefined, file.name, receiptHint);
   }
 
   async function handleConfirmReceipt(e: SyntheticEvent) {
@@ -1111,13 +1199,13 @@ export default function DashboardWorkspace({
 
   const entryOptions = (run: (action: () => void) => void) => (
     <>
+      <button type="button" className="dropdown-item" onClick={() => run(openReceiptModal)}>
+        <Sparkles size={18} aria-hidden="true" />
+        <span>Enviar foto</span>
+      </button>
       <button type="button" className="dropdown-item" onClick={() => run(() => openManualModal())}>
         <PenLine size={18} aria-hidden="true" />
         <span>Digitação manual</span>
-      </button>
-      <button type="button" className="dropdown-item" onClick={() => run(openReceiptModal)}>
-        <ScanLine size={18} aria-hidden="true" />
-        <span>Ler comprovante (OCR)</span>
       </button>
       <button type="button" className="dropdown-item" onClick={() => run(openImportModal)}>
         <FileUp size={18} aria-hidden="true" />
@@ -2224,13 +2312,16 @@ export default function DashboardWorkspace({
         </LightDismissModal>
       )}
 
-      {/* 2. Receipt AI / OCR Modal */}
+      {/* 2. Receipt AI Modal */}
       {activeModal === 'receipt' && (
-        <LightDismissModal title="Leitura de Comprovante por IA" onClose={() => setActiveModal(null)}>
+        <LightDismissModal
+          title="Enviar foto de comprovante (IA)"
+          onClose={() => setActiveModal(null)}
+        >
           <div className="modal-body">
             {modalError && <div className="alert alert-error" role="alert"><CircleAlert size={16} /><span>{modalError}</span></div>}
             <p>
-              Envie a foto ou print de qualquer comprovante (cupom fiscal NFC-e/SAT, PIX, boleto, fatura de cartão ou maquininha). O motor identifica o valor pago, data e sugere a categoria para sua confirmação.
+              Tire uma foto ou envie o arquivo de qualquer comprovante (cupom fiscal NFC-e/SAT, PIX, boleto, fatura de cartão ou maquininha). A IA identifica o valor pago, data e sugere a categoria para sua confirmação.
             </p>
             {aiEnabled && aiTier === 'free_prototype' && (
               <p className="field-hint">
@@ -2238,35 +2329,100 @@ export default function DashboardWorkspace({
               </p>
             )}
 
-            <div className="upload-dropzone">
+            <div className="preset-buttons" style={{ marginBottom: 4 }}>
+              <input
+                ref={cameraFallbackRef}
+                id="receiptCameraInput"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void processReceiptFile(file);
+                }}
+              />
+              <button
+                type="button"
+                className="button button-primary"
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={() => void (cameraActive ? stopCamera() : startCamera())}
+                disabled={actionBusy}
+              >
+                <Camera size={18} aria-hidden="true" />
+                <span>{cameraActive ? 'Fechar câmera' : 'Tirar foto'}</span>
+              </button>
+
               <input
                 id="receiptFileInput"
                 type="file"
-                accept="image/*,.pdf"
-                capture="environment"
+                accept="image/jpeg,image/png,image/webp,image/*,.pdf"
                 className="sr-only"
-                onChange={async (e) => {
+                onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (!file) return;
-                  setReceiptFileName(file.name);
-                  if (file.type.startsWith('image/')) {
-                    try {
-                      const compressed = await compressReceiptImage(file);
-                      await handleExtractReceipt(undefined, file.name, receiptHint, compressed);
-                      return;
-                    } catch {
-                      // Fallback to filename/hint extraction if browser fails to decode image
-                    }
+                  if (file) {
+                    stopCamera();
+                    void processReceiptFile(file);
                   }
-                  await handleExtractReceipt(undefined, file.name, receiptHint);
                 }}
               />
-              <label htmlFor="receiptFileInput" className="upload-dropzone-label">
-                <Camera size={24} aria-hidden="true" />
-                <strong>{receiptFileName || 'Selecionar foto do comprovante ou PDF'}</strong>
-                <small>JPG, PNG, WebP ou PDF • Redimensionamento automático para economizar dados</small>
+              <label
+                htmlFor="receiptFileInput"
+                className="button button-secondary"
+                style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }}
+              >
+                <FileUp size={18} aria-hidden="true" />
+                <span>Enviar arquivo</span>
               </label>
             </div>
+
+            {cameraActive && (
+              <div
+                style={{
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  border: '1px solid var(--line)',
+                  background: '#000',
+                  marginTop: 8,
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
+                />
+                <div style={{ display: 'flex', gap: 8, padding: 10, background: 'var(--surface)' }}>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    style={{ flex: 1, justifyContent: 'center' }}
+                    onClick={() => void captureCameraPhoto()}
+                    disabled={actionBusy}
+                  >
+                    <Camera size={18} aria-hidden="true" />
+                    <span>{actionBusy ? 'Processando…' : 'Capturar foto'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={stopCamera}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {receiptFileName && (
+              <p className="field-hint" style={{ marginTop: 4 }}>
+                Arquivo selecionado: <strong>{receiptFileName}</strong>
+              </p>
+            )}
+            <small className="field-hint">
+              Formatos suportados: JPG, PNG, WebP ou PDF • Redimensionamento automático no celular
+            </small>
 
             <div className="sample-presets">
               <span className="field-hint">Ou teste a extração com um comprovante de exemplo:</span>
