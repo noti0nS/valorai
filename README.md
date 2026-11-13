@@ -49,7 +49,7 @@ Login / Cadastro (Turnstile) ──▶ Confirmação (Demo Inbox) ──▶ Perf
 - **Limites e metas:** Tetos configuráveis por categoria, diário ou proporção de cartão com **alertas visuais não bloqueantes** (80%, 100% e excedido), além de registro de aportes em metas.
 - **Consultor financeiro por IA (`POST /api/ai/summary`):**
   - Recebe apenas métricas condensadas e livres de PII, guiadas por estados determinísticos (`EXPENSE_RATIO_HIGH`, `LIMIT_EXCEEDED`, `NEAR_LIMIT`, `POSITIVE_SURPLUS`, `NO_LIMITS_SET`, `LOW_ACTIVITY`).
-  - Cache em `DurableKv` com **janela de verificação de 3 dias** e revalidação por **premissas materiais** (mudança de estado, objetivo, categoria líder, status de alerta ou variação `>= 15%` em renda/despesas) — evitando chamadas desnecessárias à LLM a cada movimentação.
+  - Cache em `DurableKv` invalidado apenas por **premissas materiais** (mudança de estado, objetivo, categoria líder, status de alerta ou variação `>= 15%` em renda/despesas), sem TTL fixo — evitando chamadas desnecessárias à LLM a cada movimentação ou expiração arbitrária.
   - Fallback determinístico local automático quando a IA não está configurada ou o circuit breaker (HTTP 429) está ativo.
 - **Interface acessível:** Tema claro/escuro sincronizado com `prefers-color-scheme`, diálogos nativos (`<dialog closedby="any">`), animações numéricas (`NumberFlow`) e respeito a `prefers-reduced-motion`.
 

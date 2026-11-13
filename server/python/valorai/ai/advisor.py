@@ -6,8 +6,6 @@ from valorai.ai.client import AiProviderError, AiRateLimitError, OpenAiCompatibl
 from valorai.ai.receipt import CIRCUIT_BREAKER_KEY, CIRCUIT_COOLDOWN_SECONDS
 from valorai.crypto import sha256_hex
 
-CHECK_INTERVAL_SECONDS = 3 * 24 * 3600  # 3 days between premise re-evaluations
-SUMMARY_TTL_SECONDS = CHECK_INTERVAL_SECONDS
 MANUAL_REFRESH_COOLDOWN_SECONDS = 30
 SIGNIFICANT_CHANGE_RATIO = 0.15  # 15% shift in income or total expenses
 SIGNIFICANT_BASELINE_AMOUNT = 200.0  # Minimum R$ 200 shift when baseline was 0
@@ -225,37 +223,22 @@ class FinancialAdvisor:
     def _build_snapshot(self, condensed: dict) -> dict:
         return {k: v for k, v in condensed.items() if k != "fingerprint"}
 
-    def _keep_cached(self, key: str, cached: dict, condensed: dict, now_ts: int) -> bool:
-        """Returns True if the cached AI summary should still be served without calling the LLM."""
-        next_check_at = int(cached.get("nextCheckAt") or cached.get("expiresAt") or 0)
-        if now_ts < next_check_at:
-            return True
-
-        # 3-day check window elapsed: only trigger regeneration when material premises changed.
+    def _keep_cached(self, cached: dict, condensed: dict) -> bool:
+        """Returns True if the cached AI summary remains valid under current financial premises."""
         snapshot = cached.get("snapshot") if isinstance(cached.get("snapshot"), dict) else None
-        if snapshot is not None and not should_regenerate_summary(snapshot, condensed):
-            if self.kv is not None:
-                self.kv.put(
-                    key,
-                    {
-                        **cached,
-                        "nextCheckAt": now_ts + CHECK_INTERVAL_SECONDS,
-                        "lastCheckedAt": now_ts,
-                    },
-                )
-            return True
-        return False
+        if snapshot is None:
+            return False
+        return not should_regenerate_summary(snapshot, condensed)
 
     def _can_call_ai(self) -> bool:
         return bool(self.client and self.client.is_configured() and not self._circuit_open())
 
     def get_cached_or_fallback(self, account_id: str, condensed: dict) -> tuple[dict, bool]:
         """Non-blocking read for GET /api/dashboard: returns (summary, needs_ai_refresh)."""
-        now_ts = self._now_ts()
         key = self._cache_key(account_id)
         cached = self.kv.get(key) if self.kv is not None else None
         if cached and isinstance(cached.get("data"), dict):
-            if self._keep_cached(key, cached, condensed, now_ts):
+            if self._keep_cached(cached, condensed):
                 return {**cached["data"], "cached": True}, False
             return {**cached["data"], "cached": True}, self._can_call_ai()
 
@@ -270,7 +253,7 @@ class FinancialAdvisor:
 
         if has_cached_data:
             in_cooldown = (now_ts - int(cached.get("createdAt", 0))) < MANUAL_REFRESH_COOLDOWN_SECONDS
-            if (not force or in_cooldown) and self._keep_cached(key, cached, condensed, now_ts):
+            if (not force or in_cooldown) and self._keep_cached(cached, condensed):
                 return {**cached["data"], "cached": True}
 
         if not self._can_call_ai():
@@ -300,8 +283,6 @@ class FinancialAdvisor:
                         "fingerprint": condensed["fingerprint"],
                         "snapshot": prompt_payload,
                         "createdAt": now_ts,
-                        "lastCheckedAt": now_ts,
-                        "nextCheckAt": now_ts + CHECK_INTERVAL_SECONDS,
                         "data": result,
                     },
                 )

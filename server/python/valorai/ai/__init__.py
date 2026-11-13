@@ -1,5 +1,4 @@
 from valorai.ai.advisor import (
-    CHECK_INTERVAL_SECONDS,
     FinancialAdvisor,
     build_deterministic_summary,
     compute_deterministic_context,
@@ -13,7 +12,6 @@ __all__ = [
     "AiProviderError",
     "AiRateLimitError",
     "AiReceiptExtractor",
-    "CHECK_INTERVAL_SECONDS",
     "FinancialAdvisor",
     "OpenAiCompatibleClient",
     "build_deterministic_summary",

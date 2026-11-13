@@ -4,7 +4,6 @@ from test_account import registration
 from test_http import cookie_of, post
 
 from valorai.ai import (
-    CHECK_INTERVAL_SECONDS,
     AiConfig,
     AiProviderError,
     AiRateLimitError,
@@ -261,7 +260,7 @@ def test_http_ai_summary_and_config_endpoints(world):
     assert summary_res.body["aiSummary"]["headline"] == "Resumo IA ativo"
 
 
-def test_advisor_3_day_check_and_material_premises(world):
+def test_advisor_premise_based_revalidation_without_ttl(world):
     calls = {"n": 0}
 
     def post_ok(*_):
@@ -291,7 +290,7 @@ def test_advisor_3_day_check_and_material_premises(world):
     assert first["headline"] == "Relatório #1"
     assert calls["n"] == 1
 
-    # Minor transaction within 3 days does NOT trigger regeneration
+    # Minor transaction does NOT trigger regeneration
     minor_dashboard = {
         **base_dashboard,
         "summary": {"effectiveIncome": 5000.0, "totalExpenses": 2050.0, "freeBalance": 2950.0, "fixedShare": 30, "variableShare": 11},
@@ -300,23 +299,22 @@ def test_advisor_3_day_check_and_material_premises(world):
     minor_condensed = compute_deterministic_context(minor_dashboard)
     assert should_regenerate_summary(base_condensed, minor_condensed) is False
 
-    cached_within_window, needs_refresh = advisor.get_cached_or_fallback("acc-1", minor_condensed)
-    assert cached_within_window["headline"] == "Relatório #1"
-    assert cached_within_window["cached"] is True
+    cached_minor, needs_refresh = advisor.get_cached_or_fallback("acc-1", minor_condensed)
+    assert cached_minor["headline"] == "Relatório #1"
+    assert cached_minor["cached"] is True
     assert needs_refresh is False
     assert advisor.generate_summary("acc-1", minor_condensed)["headline"] == "Relatório #1"
     assert calls["n"] == 1
 
-    # Advance 3 days: check runs, but minor change does NOT justify regenerating
-    world["clock"].advance(CHECK_INTERVAL_SECONDS)
-    after_3_days, needs_refresh = advisor.get_cached_or_fallback("acc-1", minor_condensed)
-    assert after_3_days["headline"] == "Relatório #1"
-    assert after_3_days["cached"] is True
+    # Even after 30 days, without a material premise change, cache is kept (no TTL expiration)
+    world["clock"].advance(30 * 24 * 3600)
+    after_month, needs_refresh = advisor.get_cached_or_fallback("acc-1", minor_condensed)
+    assert after_month["headline"] == "Relatório #1"
+    assert after_month["cached"] is True
     assert needs_refresh is False
     assert calls["n"] == 1
 
-    # Even if a material change happens right after the 3-day check bumped nextCheckAt,
-    # it waits until the next 3-day window instead of firing on every action
+    # When a material premise changes (>=15% expense shift), regeneration triggers immediately
     major_dashboard = {
         **base_dashboard,
         "summary": {"effectiveIncome": 5000.0, "totalExpenses": 2600.0, "freeBalance": 2400.0, "fixedShare": 30, "variableShare": 22},
@@ -324,12 +322,6 @@ def test_advisor_3_day_check_and_material_premises(world):
     }
     major_condensed = compute_deterministic_context(major_dashboard)
     assert should_regenerate_summary(base_condensed, major_condensed) is True
-    _, needs_refresh = advisor.get_cached_or_fallback("acc-1", major_condensed)
-    assert needs_refresh is False
-    assert calls["n"] == 1
-
-    # Advance another 3 days: now the check sees the >=15% expense shift and triggers refresh
-    world["clock"].advance(CHECK_INTERVAL_SECONDS)
     cached_before_refresh, needs_refresh = advisor.get_cached_or_fallback("acc-1", major_condensed)
     assert cached_before_refresh["headline"] == "Relatório #1"
     assert needs_refresh is True
