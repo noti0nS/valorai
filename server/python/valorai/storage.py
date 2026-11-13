@@ -129,7 +129,10 @@ class MemoryLessons:
         self.progress: dict[tuple[str, str], dict] = {}
 
     def list(self) -> list[dict]:
-        return sorted(self.lessons, key=lambda item: item["id"])
+        return sorted(
+            [{**item, "category": item.get("category", "Orçamento & Rotina")} for item in self.lessons],
+            key=lambda item: item["id"],
+        )
 
     def list_progress(self, account_id: str) -> dict[str, int]:
         return {
@@ -491,9 +494,9 @@ class SqlLessons:
 
     def list(self) -> list[dict]:
         return self.db.query(
-            "SELECT id, title, description, body, minutes FROM lessons ORDER BY id",
+            "SELECT id, title, description, body, minutes, category FROM lessons ORDER BY id",
             (),
-            ("id", "title", "description", "body", "minutes"),
+            ("id", "title", "description", "body", "minutes", "category"),
         )
 
     def list_progress(self, account_id: str) -> dict[str, int]:

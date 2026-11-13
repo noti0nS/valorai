@@ -1002,6 +1002,14 @@ a { color: inherit; }
 .search-box input { width: 100%; height: 42px; padding: 0 12px 0 38px; border-radius: var(--radius); border: 1px solid var(--line-strong); background: var(--surface); font-size: 14px; }
 .ledger-filters-bar select { height: 42px; padding: 0 12px; border-radius: var(--radius); border: 1px solid var(--line-strong); background: var(--surface); font-size: 14px; }
 
+.guides-toolbar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.guide-category-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-cat-pill { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+.guide-cat-pill:hover { border-color: var(--sage); color: var(--ink); }
+.guide-cat-pill.active { background: var(--sage-tint); border-color: var(--sage); color: var(--green-text); font-weight: 600; }
+.guide-category-tag { display: inline-flex; align-items: center; align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: var(--sage-tint); color: var(--green-text); font-size: 12px; font-weight: 600; }
+.guides-empty-state { padding: 32px 16px; border: 1px dashed var(--line-strong); border-radius: 14px; background: var(--wash); display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: var(--ink-2); }
+
 .guides-cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .guide-editorial-card { padding: 20px; border-radius: 14px; border: 1px solid var(--line); background: var(--wash); display: flex; flex-direction: column; gap: 10px; }
 .guide-editorial-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

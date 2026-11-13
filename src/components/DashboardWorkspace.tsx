@@ -55,6 +55,7 @@ export type DashboardLesson = {
   description: string;
   body: string;
   minutes: number;
+  category?: string;
   progressPercent?: number;
 };
 
@@ -498,6 +499,8 @@ export default function DashboardWorkspace({
   const [actionBusy, setActionBusy] = useState(false);
   const [modalError, setModalError] = useState('');
   const [fieldErrs, setFieldErrs] = useState<Record<string, string>>({});
+  const [guideSearch, setGuideSearch] = useState('');
+  const [guideCategory, setGuideCategory] = useState('all');
 
   // Manual Transaction Form State
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
@@ -1771,60 +1774,131 @@ export default function DashboardWorkspace({
         )}
 
         {/* ===================== TAB 4: GUIAS ===================== */}
-        {activeTab === 'guides' && (
+        {activeTab === 'guides' && (() => {
+          const normalizeSearch = (value: string) =>
+            value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          const categoryCounts = new Map<string, number>();
+          for (const item of allLessons) {
+            const cat = item.category?.trim() || 'Geral';
+            categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
+          }
+          const categories = Array.from(categoryCounts.entries());
+          const normalizedQuery = normalizeSearch(guideSearch.trim());
+          const filteredLessons = allLessons.filter((item) => {
+            const cat = item.category?.trim() || 'Geral';
+            if (guideCategory !== 'all' && cat !== guideCategory) return false;
+            if (!normalizedQuery) return true;
+            const haystack = normalizeSearch(`${item.title} ${item.description} ${cat} ${item.body}`);
+            return haystack.includes(normalizedQuery);
+          });
+
+          return (
           <section className="card full-section-card" aria-labelledby="guides-library-title">
             <div className="card-head">
               <div>
                 <h2 id="guides-library-title">Biblioteca de Educação Financeira</h2>
                 <p>Guias práticos pré-carregados para apoiar suas decisões e metas</p>
               </div>
+              <span className="tag">{filteredLessons.length} de {allLessons.length} guias</span>
             </div>
-            <div className="guides-cards-grid">
-              {allLessons.map((item) => {
-                const pct = item.progressPercent ?? 0;
-                return (
-                  <article key={item.id} className="guide-editorial-card">
-                    <div className="guide-editorial-top">
-                      <span className="guide-icon">
-                        <BookOpen size={20} aria-hidden="true" />
-                      </span>
-                      <span className="tag">
-                        <Clock3 size={13} aria-hidden="true" /> {item.minutes} min de leitura
-                      </span>
-                    </div>
-                    <h3>{item.title}</h3>
-                    <p>{item.description}</p>
-                    <div className="guide-progress-row">
-                      <progress className="styled-progress" max={100} value={pct} aria-label={`Progresso de leitura: ${item.title}`} />
-                      <div className="guide-progress-meta">
-                        <span>{pct >= 100 ? 'Concluído' : pct > 0 ? `Em leitura (${pct}%)` : 'Não iniciado'}</span>
-                        <div className="guide-card-btns">
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => onOpenLesson(item)}
-                          >
-                            Ler guia
-                          </button>
-                          {pct < 100 && (
+
+            <div className="guides-toolbar">
+              <div className="search-box">
+                <Search size={16} aria-hidden="true" />
+                <input
+                  type="search"
+                  placeholder="Buscar guias por título, tema ou conteúdo…"
+                  value={guideSearch}
+                  onChange={(e) => setGuideSearch(e.target.value)}
+                  aria-label="Buscar guias financeiros"
+                />
+              </div>
+              <div className="guide-category-pills" role="group" aria-label="Filtrar guias por categoria">
+                <button
+                  type="button"
+                  className={`guide-cat-pill ${guideCategory === 'all' ? 'active' : ''}`}
+                  aria-pressed={guideCategory === 'all'}
+                  onClick={() => setGuideCategory('all')}
+                >
+                  Todos ({allLessons.length})
+                </button>
+                {categories.map(([cat, count]) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`guide-cat-pill ${guideCategory === cat ? 'active' : ''}`}
+                    aria-pressed={guideCategory === cat}
+                    onClick={() => setGuideCategory(cat)}
+                  >
+                    {cat} ({count})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredLessons.length > 0 ? (
+              <div className="guides-cards-grid">
+                {filteredLessons.map((item) => {
+                  const pct = item.progressPercent ?? 0;
+                  return (
+                    <article key={item.id} className="guide-editorial-card">
+                      <div className="guide-editorial-top">
+                        <span className="guide-icon">
+                          <BookOpen size={20} aria-hidden="true" />
+                        </span>
+                        <span className="tag">
+                          <Clock3 size={13} aria-hidden="true" /> {item.minutes} min de leitura
+                        </span>
+                      </div>
+                      {item.category && (
+                        <span className="guide-category-tag">{item.category}</span>
+                      )}
+                      <h3>{item.title}</h3>
+                      <p>{item.description}</p>
+                      <div className="guide-progress-row">
+                        <progress className="styled-progress" max={100} value={pct} aria-label={`Progresso de leitura: ${item.title}`} />
+                        <div className="guide-progress-meta">
+                          <span>{pct >= 100 ? 'Concluído' : pct > 0 ? `Em leitura (${pct}%)` : 'Não iniciado'}</span>
+                          <div className="guide-card-btns">
                             <button
                               type="button"
-                              className="button button-secondary button-small"
-                              onClick={() => handleMarkLessonProgress(item.id, 100)}
-                              disabled={actionBusy}
+                              className="link-button"
+                              onClick={() => onOpenLesson(item)}
                             >
-                              Marcar concluído
+                              Ler guia
                             </button>
-                          )}
+                            {pct < 100 && (
+                              <button
+                                type="button"
+                                className="button button-secondary button-small"
+                                onClick={() => handleMarkLessonProgress(item.id, 100)}
+                                disabled={actionBusy}
+                              >
+                                Marcar concluído
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="guides-empty-state">
+                <p>Nenhum guia encontrado para os filtros selecionados.</p>
+                <button
+                  type="button"
+                  className="button button-secondary button-small"
+                  onClick={() => { setGuideSearch(''); setGuideCategory('all'); }}
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            )}
           </section>
-        )}
+          );
+        })()}
       </main>
 
       <footer className="site-footer dash-footer">
