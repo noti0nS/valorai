@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "astro dev --host 127.0.0.1",
-    "dev:api": "uv run --directory server/python pywrangler dev --ip 127.0.0.1 --port 8787",
+    "dev:api": "uv run --directory server/python pywrangler d1 migrations apply valorai-prototype --local && uv run --directory server/python pywrangler dev --ip 127.0.0.1 --port 8787",
     "build": "astro build",
     "check": "astro check",
     "test": "tsx --test tests/*.test.ts",
