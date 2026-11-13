@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useId, type SyntheticEvent, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import NumberFlow from '@number-flow/react';
 import {
   Plus, PenLine, Camera, FileUp, ShoppingCart, Home, Car, BookOpen,
@@ -582,12 +583,19 @@ export default function DashboardWorkspace({
   // Home AI Summary State
   const [aiSummaryOverride, setAiSummaryOverride] = useState<AiSummaryData | null>(null);
   const [aiSummaryBusy, setAiSummaryBusy] = useState(false);
+  const [aiShimmerDone, setAiShimmerDone] = useState(false);
 
   const activeAiSummary = aiSummaryOverride ?? dashboard?.aiSummary ?? null;
 
   useEffect(() => {
     setAiSummaryOverride(null);
   }, [dashboard?.aiSummary]);
+
+  useEffect(() => {
+    setAiShimmerDone(false);
+    const timer = window.setTimeout(() => setAiShimmerDone(true), 420);
+    return () => window.clearTimeout(timer);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!aiEnabled || !dashboard?.aiSummaryNeedsRefresh || aiSummaryBusy) return;
@@ -646,6 +654,7 @@ export default function DashboardWorkspace({
   const dailyAverage = dashboard?.summary.dailyAverage ?? Math.round(effectiveFixed / 30);
   const dailySeries = dashboard?.summary.dailySeries ?? [];
   const sparkline = buildSparklinePaths(dailySeries);
+  const [hoveredSparkIdx, setHoveredSparkIdx] = useState<number | null>(null);
 
   const transactions = dashboard?.transactions ?? [];
   const filteredTransactions = transactions.filter((tx) => {
@@ -848,18 +857,6 @@ export default function DashboardWorkspace({
       setError(err instanceof Error ? err.message : 'Não foi possível carregar os exemplos.');
     } finally {
       setActionBusy(false);
-    }
-  }
-
-  async function handleRefreshAiSummary() {
-    setAiSummaryBusy(true);
-    try {
-      const res = await apiCall<{ aiSummary: AiSummaryData }>('ai/summary', { force: true });
-      if (res.aiSummary) setAiSummaryOverride(res.aiSummary);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível atualizar a análise agora.');
-    } finally {
-      setAiSummaryBusy(false);
     }
   }
 
@@ -1271,6 +1268,14 @@ export default function DashboardWorkspace({
         {errorAlert}
         {noticeAlert}
 
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
         {/* ===================== TAB 1: VISÃO GERAL ===================== */}
         {activeTab === 'overview' && (
           <div className="dash-grid overview-grid">
@@ -1333,48 +1338,51 @@ export default function DashboardWorkspace({
                   </div>
                 </div>
 
-                <div className="ai-insight">
+                <div className={`ai-insight ${aiSummaryBusy || !aiShimmerDone ? 'is-loading' : 'is-revealed'}`}>
                   <div className="ai-insight-icon" aria-hidden="true">
                     <Sparkles size={17} />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-                      <strong>
-                        {activeAiSummary?.headline ?? 'Previsão ValorAI'}
-                      </strong>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className="tx-badge ia">
-                          {activeAiSummary?.source === 'ai' ? 'IA' : 'Resumo local'}
-                        </span>
-                        {aiEnabled && (
-                          <button
-                            type="button"
-                            className="button button-secondary button-small"
-                            onClick={handleRefreshAiSummary}
-                            disabled={aiSummaryBusy}
-                          >
-                            {aiSummaryBusy ? 'Atualizando…' : 'Atualizar'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p>
-                      {activeAiSummary?.summary ??
-                        dashboard?.summary.insight.message ??
-                        `Seus gastos fixos comprometem ${fixedShare}% da renda mensal. Registre seus lançamentos para acompanhar o ritmo diário.`}
-                    </p>
-                    {activeAiSummary && activeAiSummary.recommendations.length > 0 && (
-                      <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: '0.88rem' }}>
-                        {activeAiSummary.recommendations.map((rec, idx) => (
-                          <li key={idx}>{rec}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {aiEnabled && aiTier === 'free_prototype' && (
-                      <small className="field-hint" style={{ display: 'block', marginTop: 6 }}>
-                        Ambiente de protótipo (Free Tier): métricas resumidas sem dados pessoais.
-                      </small>
-                    )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <AnimatePresence mode="wait">
+                      {aiSummaryBusy || !aiShimmerDone ? (
+                        <motion.div
+                          key="ai-shimmer"
+                          className="ai-shimmer-stack"
+                          initial={{ opacity: 0.6 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.18 }}
+                          aria-hidden="true"
+                        >
+                          <div className="ai-shimmer-line short" />
+                          <div className="ai-shimmer-line full" />
+                          <div className="ai-shimmer-line medium" />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key={activeAiSummary?.headline ?? 'ai-content'}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <strong style={{ display: 'block', marginBottom: 4 }}>
+                            {activeAiSummary?.headline ?? 'Previsão ValorAI'}
+                          </strong>
+                          <p>
+                            {activeAiSummary?.summary ??
+                              dashboard?.summary.insight.message ??
+                              `Seus gastos fixos comprometem ${fixedShare}% da renda mensal. Registre seus lançamentos para acompanhar o ritmo diário.`}
+                          </p>
+                          {activeAiSummary && activeAiSummary.recommendations.length > 0 && (
+                            <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: '0.88rem' }}>
+                              {activeAiSummary.recommendations.map((rec, idx) => (
+                                <li key={idx}>{rec}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
               </section>
@@ -1470,10 +1478,27 @@ export default function DashboardWorkspace({
                     <TrendingUp size={18} aria-hidden="true" />
                     <h2 id="sparkline-title">Ritmo Diário de Despesas</h2>
                   </div>
-                  <span className="avg-pill num">Média: {currency(dailyAverage)}/dia</span>
+                  <span className="avg-pill num">
+                    {hoveredSparkIdx !== null && dailySeries[hoveredSparkIdx]
+                      ? `${dailySeries[hoveredSparkIdx].label}: ${currency(dailySeries[hoveredSparkIdx].amount)}`
+                      : `Média: ${currency(dailyAverage)}/dia`}
+                  </span>
                 </div>
                 <div className="sparkline-Wrap">
-                  <svg className="sparkline-svg" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true">
+                  <svg
+                    className="sparkline-svg"
+                    viewBox="0 0 300 64"
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                    style={{ cursor: dailySeries.length > 1 ? 'crosshair' : 'default' }}
+                    onMouseMove={(e) => {
+                      if (dailySeries.length <= 1) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
+                      setHoveredSparkIdx(Math.round(ratio * (dailySeries.length - 1)));
+                    }}
+                    onMouseLeave={() => setHoveredSparkIdx(null)}
+                  >
                     <defs>
                       <linearGradient id="valoraiSparkGrad" x1="0" x2="0" y1="0" y2="1">
                         <stop offset="0%" stopColor="var(--chart)" stopOpacity="0.18" />
@@ -1490,7 +1515,19 @@ export default function DashboardWorkspace({
                       strokeLinejoin="round"
                       vectorEffect="non-scaling-stroke"
                     />
-                    <circle cx={sparkline.last.x} cy={sparkline.last.y} r="3.5" fill="var(--chart)" />
+                    {hoveredSparkIdx !== null && dailySeries.length > 1 ? (() => {
+                      const maxAmt = Math.max(1, ...dailySeries.map((d) => d.amount));
+                      const hx = (hoveredSparkIdx / Math.max(1, dailySeries.length - 1)) * 300;
+                      const hy = 58 - (dailySeries[hoveredSparkIdx].amount / maxAmt) * 48;
+                      return (
+                        <>
+                          <line x1={hx} y1={4} x2={hx} y2={60} stroke="var(--chart)" strokeOpacity="0.35" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+                          <circle cx={hx} cy={hy} r="4.2" fill="var(--surface)" stroke="var(--chart)" strokeWidth="2.2" />
+                        </>
+                      );
+                    })() : (
+                      <circle cx={sparkline.last.x} cy={sparkline.last.y} r="3.5" fill="var(--chart)" />
+                    )}
                   </svg>
                   <div className="sparkline-axis">
                     <span>DIA 01</span>
@@ -2024,6 +2061,8 @@ export default function DashboardWorkspace({
           </section>
           );
         })()}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <footer className="site-footer dash-footer">
