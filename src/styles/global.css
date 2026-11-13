@@ -220,40 +220,48 @@ a { color: inherit; }
 .form-actions .button-primary { flex: 1; }
 .form-switch { margin-top: 20px; text-align: center; font-size: 15px; color: var(--ink-2); }
 .field-forgot { display: flex; justify-content: flex-end; margin-top: 6px; font-size: 13px; }
-.splash-loader { min-height: 70dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; }
-.splash-card {
-  position: relative;
-  overflow: hidden;
-  width: min(320px, 86vw);
-  aspect-ratio: 1.586 / 1;
-  border-radius: 20px;
-  padding: 22px 24px;
+.splash-screen {
+  min-height: 100dvh;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  background: linear-gradient(135deg, #14281D 0%, #1B3627 58%, #0F2017 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 22px 48px -14px rgba(20, 40, 29, 0.45), 0 4px 12px rgba(20, 40, 29, 0.16);
-  color: #FFFFFF;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  background: var(--bg);
 }
-.splash-card::after {
-  content: "";
+.splash-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  animation: splash-enter 0.45s cubic-bezier(.22, 1, .36, 1) both;
+}
+.splash-brand span strong { color: var(--sage); font-weight: 700; }
+.splash-track {
+  position: relative;
+  width: 132px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+.splash-bar {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(112deg, transparent 28%, rgba(126, 159, 140, 0.18) 50%, transparent 72%);
-  transform: translateX(-100%);
-  animation: splash-sheen 1.8s cubic-bezier(.4, 0, .2, 1) infinite;
-  pointer-events: none;
+  top: 0;
+  bottom: 0;
+  width: 48%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--sage), var(--green), transparent);
+  animation: splash-slide 1.25s cubic-bezier(.45, 0, .55, 1) infinite;
 }
-.splash-card-top { display: flex; align-items: center; justify-content: space-between; }
-.splash-card-brand { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: #FFFFFF; }
-.splash-card-brand span { color: #7E9F8C; }
-.splash-card-issuer { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255, 255, 255, 0.48); }
-.splash-card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.splash-card-status { font-size: 12px; color: rgba(255, 255, 255, 0.68); letter-spacing: 0.01em; }
-.splash-card-chip { width: 30px; height: 22px; border-radius: 6px; border: 1px solid rgba(126, 159, 140, 0.45); background: linear-gradient(135deg, rgba(126, 159, 140, 0.25), rgba(255, 255, 255, 0.05)); }
-@keyframes splash-sheen { 0% { transform: translateX(-100%); } 65%, 100% { transform: translateX(100%); } }
-@media (prefers-reduced-motion: reduce) { .splash-card::after { animation: none; transform: none; opacity: 0.4; } }
+@keyframes splash-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes splash-slide { 0% { left: -50%; } 100% { left: 105%; } }
+@media (prefers-reduced-motion: reduce) { .splash-brand { animation: none; } .splash-bar { animation: none; left: 26%; } }
 
 .alert { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--radius); font-size: 14px; margin-bottom: 20px; }
 .alert > svg { flex-shrink: 0; margin-top: 2px; }

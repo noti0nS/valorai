@@ -357,7 +357,15 @@ export default function RegistrationApp() {
   const isDashboard = view === 'dashboard' && !!account;
 
   return <MotionConfig reducedMotion="user"><div className={`app-shell ${isDashboard ? 'dash-shell' : ''}`}>
-    {isDashboard && account ? (
+    {loadingSession ? (
+      <main id="main" className="splash-screen" role="status" aria-live="polite" aria-label="Carregando ValorAI">
+        <div className="splash-brand">
+          <ProductMark />
+          <span>Valor<strong>AI</strong></span>
+        </div>
+        <div className="splash-track" aria-hidden="true"><span className="splash-bar" /></div>
+      </main>
+    ) : isDashboard && account ? (
       <DashboardWorkspace
         account={account}
         dashboard={dashboard}
@@ -399,22 +407,8 @@ export default function RegistrationApp() {
               : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}
           </div>
         </header>
-        <main id="main" className={view === 'deactivated' ? 'state-page' : loadingSession ? 'splash-loader' : 'auth'}>
-          {loadingSession ? (
-            <div className="splash-loader" role="status" aria-live="polite">
-              <div className="splash-card">
-                <div className="splash-card-top">
-                  <span className="splash-card-brand">Valor<span>AI</span></span>
-                  <span className="splash-card-issuer">Nulfinance</span>
-                </div>
-                <div className="splash-card-bottom">
-                  <span className="splash-card-status">Carregando seu espaço…</span>
-                  <span className="splash-card-chip" aria-hidden="true" />
-                </div>
-              </div>
-            </div>
-          ) : (
-          <><AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' || view === 'recovery' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
+        <main id="main" className={view === 'deactivated' ? 'state-page' : 'auth'}>
+          <AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' || view === 'recovery' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
             {view === 'register' && <>
               {!editing && <div className="progress"><p className="progress-label" aria-hidden="true">Etapa {step + 1} de 4 · <strong>{stepNames[step]}</strong></p>
                 <ol aria-label="Etapas do cadastro">{stepNames.map((label, i) => <li key={label} className={i < step ? 'complete' : i === step ? 'current' : ''} aria-current={i === step ? 'step' : undefined}><span>{label}<span className="sr-only">{i < step ? ' (concluída)' : ''}</span></span></li>)}</ol></div>}
@@ -501,8 +495,6 @@ export default function RegistrationApp() {
           </motion.div></AnimatePresence>
           {(view === 'login' || view === 'register' || view === 'recovery') && <ProductPreview />}
           <div className="sr-only" aria-live="polite">{view === 'register' ? `Etapa ${step + 1} de 4: ${stepNames[step]}` : ''}</div>
-          </>
-          )}
         </main>
         <footer className="site-footer"><div><span>Uma iniciativa</span><CompanyMark /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
       </>
