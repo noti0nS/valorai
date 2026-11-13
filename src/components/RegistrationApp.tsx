@@ -402,11 +402,16 @@ export default function RegistrationApp() {
         <main id="main" className={view === 'deactivated' ? 'state-page' : loadingSession ? 'splash-loader' : 'auth'}>
           {loadingSession ? (
             <div className="splash-loader" role="status" aria-live="polite">
-              <div className="splash-mark" aria-hidden="true">
-                <span className="splash-ring" />
-                <ProductMark />
+              <div className="splash-card">
+                <div className="splash-card-top">
+                  <span className="splash-card-brand">Valor<span>AI</span></span>
+                  <span className="splash-card-issuer">Nulfinance</span>
+                </div>
+                <div className="splash-card-bottom">
+                  <span className="splash-card-status">Carregando seu espaço…</span>
+                  <span className="splash-card-chip" aria-hidden="true" />
+                </div>
               </div>
-              <p className="splash-label">Carregando seu espaço financeiro…</p>
             </div>
           ) : (
           <><AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' || view === 'recovery' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
