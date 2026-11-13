@@ -901,8 +901,23 @@ export default function DashboardWorkspace({
           await processReceiptFile(file);
           return;
         }
+        if (item.types.includes('text/html')) {
+          const html = await (await item.getType('text/html')).text();
+          const match = html.match(/src=["'](data:(image\/[^;]+);base64,([^"']+))["']/i);
+          if (match?.[2] && match?.[3]) {
+            const binary = atob(match[3]);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const mime = match[2];
+            const ext = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+            const file = new File([bytes], `comprovante-colado.${ext}`, { type: mime });
+            stopCamera();
+            await processReceiptFile(file);
+            return;
+          }
+        }
       }
-      setModalError('Nenhuma imagem encontrada na área de transferência. Copie uma imagem ou captura de tela e tente novamente.');
+      setModalError('Nenhuma imagem acessível pelo botão. Se você copiou um arquivo do computador, pressione Ctrl+V (ou Cmd+V) aqui para colar.');
     } catch (err) {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
         setModalError('Permissão da área de transferência negada. Pressione Ctrl+V para colar a imagem.');
