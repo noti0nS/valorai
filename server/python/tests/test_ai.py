@@ -4,6 +4,7 @@ from test_account import registration
 from test_http import cookie_of, post
 
 from valorai.ai import (
+    CHECK_INTERVAL_SECONDS,
     AiConfig,
     AiProviderError,
     AiRateLimitError,
@@ -11,6 +12,7 @@ from valorai.ai import (
     FinancialAdvisor,
     OpenAiCompatibleClient,
     compute_deterministic_context,
+    should_regenerate_summary,
 )
 from valorai.http import RegistrationApi
 from valorai.ledger.module import STANDARD_CATEGORIES, LedgerModule, suggest_category, standard_category, valid_iso_date
@@ -257,3 +259,92 @@ def test_http_ai_summary_and_config_endpoints(world):
     assert summary_res.status == 200
     assert summary_res.body["aiSummary"]["source"] == "ai"
     assert summary_res.body["aiSummary"]["headline"] == "Resumo IA ativo"
+
+
+def test_advisor_3_day_check_and_material_premises(world):
+    calls = {"n": 0}
+
+    def post_ok(*_):
+        calls["n"] += 1
+        return 200, _ok_openai_body({
+            "headline": f"Relatório #{calls['n']}",
+            "summary": "Análise financeira atualizada.",
+            "recommendations": ["Acompanhe seus gastos."],
+            "tone": "ok",
+        })
+
+    cfg = AiConfig(mode="openai_compatible", api_key="k")
+    client = OpenAiCompatibleClient(cfg, http_post=post_ok)
+    advisor = FinancialAdvisor(client, world["kv"], world["clock"])
+
+    base_dashboard = {
+        "summary": {"effectiveIncome": 5000.0, "totalExpenses": 2000.0, "freeBalance": 3000.0, "fixedShare": 30, "variableShare": 10},
+        "goal": {"title": "Reserva Financeira"},
+        "limits": [{"category": "Alimentação", "status": "ok", "percent": 50}],
+        "transactions": [{"id": "1"}, {"id": "2"}, {"id": "3"}],
+        "categoryBreakdown": [{"category": "Alimentação", "spent": 500.0}],
+    }
+    base_condensed = compute_deterministic_context(base_dashboard)
+
+    # Initial generation
+    first = advisor.generate_summary("acc-1", base_condensed)
+    assert first["headline"] == "Relatório #1"
+    assert calls["n"] == 1
+
+    # Minor transaction within 3 days does NOT trigger regeneration
+    minor_dashboard = {
+        **base_dashboard,
+        "summary": {"effectiveIncome": 5000.0, "totalExpenses": 2050.0, "freeBalance": 2950.0, "fixedShare": 30, "variableShare": 11},
+        "categoryBreakdown": [{"category": "Alimentação", "spent": 550.0}],
+    }
+    minor_condensed = compute_deterministic_context(minor_dashboard)
+    assert should_regenerate_summary(base_condensed, minor_condensed) is False
+
+    cached_within_window, needs_refresh = advisor.get_cached_or_fallback("acc-1", minor_condensed)
+    assert cached_within_window["headline"] == "Relatório #1"
+    assert cached_within_window["cached"] is True
+    assert needs_refresh is False
+    assert advisor.generate_summary("acc-1", minor_condensed)["headline"] == "Relatório #1"
+    assert calls["n"] == 1
+
+    # Advance 3 days: check runs, but minor change does NOT justify regenerating
+    world["clock"].advance(CHECK_INTERVAL_SECONDS)
+    after_3_days, needs_refresh = advisor.get_cached_or_fallback("acc-1", minor_condensed)
+    assert after_3_days["headline"] == "Relatório #1"
+    assert after_3_days["cached"] is True
+    assert needs_refresh is False
+    assert calls["n"] == 1
+
+    # Even if a material change happens right after the 3-day check bumped nextCheckAt,
+    # it waits until the next 3-day window instead of firing on every action
+    major_dashboard = {
+        **base_dashboard,
+        "summary": {"effectiveIncome": 5000.0, "totalExpenses": 2600.0, "freeBalance": 2400.0, "fixedShare": 30, "variableShare": 22},
+        "categoryBreakdown": [{"category": "Alimentação", "spent": 1100.0}],
+    }
+    major_condensed = compute_deterministic_context(major_dashboard)
+    assert should_regenerate_summary(base_condensed, major_condensed) is True
+    _, needs_refresh = advisor.get_cached_or_fallback("acc-1", major_condensed)
+    assert needs_refresh is False
+    assert calls["n"] == 1
+
+    # Advance another 3 days: now the check sees the >=15% expense shift and triggers refresh
+    world["clock"].advance(CHECK_INTERVAL_SECONDS)
+    cached_before_refresh, needs_refresh = advisor.get_cached_or_fallback("acc-1", major_condensed)
+    assert cached_before_refresh["headline"] == "Relatório #1"
+    assert needs_refresh is True
+
+    second = advisor.generate_summary("acc-1", major_condensed)
+    assert second["headline"] == "Relatório #2"
+    assert second["cached"] is False
+    assert calls["n"] == 2
+
+    # Verify other material premises trigger should_regenerate_summary
+    goal_changed = compute_deterministic_context({**base_dashboard, "goal": {"title": "Quitar dívidas"}})
+    assert should_regenerate_summary(base_condensed, goal_changed) is True
+
+    top_cat_changed = compute_deterministic_context({**base_dashboard, "categoryBreakdown": [{"category": "Transporte", "spent": 600.0}]})
+    assert should_regenerate_summary(base_condensed, top_cat_changed) is True
+
+    limit_status_changed = compute_deterministic_context({**base_dashboard, "limits": [{"category": "Alimentação", "status": "warning", "percent": 82}]})
+    assert should_regenerate_summary(base_condensed, limit_status_changed) is True

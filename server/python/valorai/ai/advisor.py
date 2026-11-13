@@ -6,8 +6,11 @@ from valorai.ai.client import AiProviderError, AiRateLimitError, OpenAiCompatibl
 from valorai.ai.receipt import CIRCUIT_BREAKER_KEY, CIRCUIT_COOLDOWN_SECONDS
 from valorai.crypto import sha256_hex
 
-SUMMARY_TTL_SECONDS = 6 * 3600  # 6 hours
+CHECK_INTERVAL_SECONDS = 3 * 24 * 3600  # 3 days between premise re-evaluations
+SUMMARY_TTL_SECONDS = CHECK_INTERVAL_SECONDS
 MANUAL_REFRESH_COOLDOWN_SECONDS = 30
+SIGNIFICANT_CHANGE_RATIO = 0.15  # 15% shift in income or total expenses
+SIGNIFICANT_BASELINE_AMOUNT = 200.0  # Minimum R$ 200 shift when baseline was 0
 
 ADVISOR_SYSTEM_PROMPT = (
     "Você é o consultor financeiro do ValorAI. Com base exclusivamente nas métricas condensadas "
@@ -82,6 +85,52 @@ def compute_deterministic_context(dashboard_data: dict) -> dict:
     }
     condensed["fingerprint"] = sha256_hex(json.dumps(condensed, sort_keys=True, ensure_ascii=False))
     return condensed
+
+
+def _material_shift(previous_value: float, current_value: float) -> bool:
+    if previous_value <= 0:
+        return current_value >= SIGNIFICANT_BASELINE_AMOUNT
+    return abs(current_value - previous_value) / previous_value >= SIGNIFICANT_CHANGE_RATIO
+
+
+def _top_category(condensed: dict) -> str | None:
+    top = condensed.get("topCategories") or []
+    if not top or not isinstance(top[0], dict):
+        return None
+    return top[0].get("category")
+
+
+def _alert_statuses(condensed: dict) -> set[tuple[str | None, str | None]]:
+    return {
+        (item.get("category"), item.get("status"))
+        for item in (condensed.get("limitAlerts") or [])
+        if isinstance(item, dict)
+    }
+
+
+def should_regenerate_summary(previous_snapshot: dict | None, current_condensed: dict) -> bool:
+    """Evaluates whether financial premises changed enough to justify a new AI summary."""
+    if not isinstance(previous_snapshot, dict):
+        return True
+    if set(previous_snapshot.get("states") or []) != set(current_condensed.get("states") or []):
+        return True
+    if str(previous_snapshot.get("goalTitle") or "") != str(current_condensed.get("goalTitle") or ""):
+        return True
+    if _top_category(previous_snapshot) != _top_category(current_condensed):
+        return True
+    if _alert_statuses(previous_snapshot) != _alert_statuses(current_condensed):
+        return True
+    if _material_shift(
+        float(previous_snapshot.get("monthlyIncome") or 0),
+        float(current_condensed.get("monthlyIncome") or 0),
+    ):
+        return True
+    if _material_shift(
+        float(previous_snapshot.get("totalExpenses") or 0),
+        float(current_condensed.get("totalExpenses") or 0),
+    ):
+        return True
+    return False
 
 
 def build_deterministic_summary(condensed: dict) -> dict:
@@ -173,38 +222,61 @@ class FinancialAdvisor:
             return
         self.kv.put(CIRCUIT_BREAKER_KEY, {"until": self._now_ts() + CIRCUIT_COOLDOWN_SECONDS})
 
+    def _build_snapshot(self, condensed: dict) -> dict:
+        return {k: v for k, v in condensed.items() if k != "fingerprint"}
+
+    def _keep_cached(self, key: str, cached: dict, condensed: dict, now_ts: int) -> bool:
+        """Returns True if the cached AI summary should still be served without calling the LLM."""
+        next_check_at = int(cached.get("nextCheckAt") or cached.get("expiresAt") or 0)
+        if now_ts < next_check_at:
+            return True
+
+        # 3-day check window elapsed: only trigger regeneration when material premises changed.
+        snapshot = cached.get("snapshot") if isinstance(cached.get("snapshot"), dict) else None
+        if snapshot is not None and not should_regenerate_summary(snapshot, condensed):
+            if self.kv is not None:
+                self.kv.put(
+                    key,
+                    {
+                        **cached,
+                        "nextCheckAt": now_ts + CHECK_INTERVAL_SECONDS,
+                        "lastCheckedAt": now_ts,
+                    },
+                )
+            return True
+        return False
+
+    def _can_call_ai(self) -> bool:
+        return bool(self.client and self.client.is_configured() and not self._circuit_open())
+
     def get_cached_or_fallback(self, account_id: str, condensed: dict) -> tuple[dict, bool]:
         """Non-blocking read for GET /api/dashboard: returns (summary, needs_ai_refresh)."""
         now_ts = self._now_ts()
-        cached = self.kv.get(self._cache_key(account_id)) if self.kv is not None else None
-        if (
-            cached
-            and cached.get("fingerprint") == condensed["fingerprint"]
-            and int(cached.get("expiresAt", 0)) > now_ts
-            and isinstance(cached.get("data"), dict)
-        ):
-            return {**cached["data"], "cached": True}, False
+        key = self._cache_key(account_id)
+        cached = self.kv.get(key) if self.kv is not None else None
+        if cached and isinstance(cached.get("data"), dict):
+            if self._keep_cached(key, cached, condensed, now_ts):
+                return {**cached["data"], "cached": True}, False
+            return {**cached["data"], "cached": True}, self._can_call_ai()
 
-        needs_refresh = bool(self.client and self.client.is_configured() and not self._circuit_open())
-        return build_deterministic_summary(condensed), needs_refresh
+        return build_deterministic_summary(condensed), self._can_call_ai()
 
     def generate_summary(self, account_id: str, condensed: dict, force: bool = False) -> dict:
         """Generates or returns cached AI summary, falling back to deterministic rules on error."""
         now_ts = self._now_ts()
         key = self._cache_key(account_id)
         cached = self.kv.get(key) if self.kv is not None else None
+        has_cached_data = bool(cached and isinstance(cached.get("data"), dict))
 
-        if cached and isinstance(cached.get("data"), dict):
-            same_fp = cached.get("fingerprint") == condensed["fingerprint"]
-            not_expired = int(cached.get("expiresAt", 0)) > now_ts
+        if has_cached_data:
             in_cooldown = (now_ts - int(cached.get("createdAt", 0))) < MANUAL_REFRESH_COOLDOWN_SECONDS
-            if same_fp and not_expired and (not force or in_cooldown):
+            if (not force or in_cooldown) and self._keep_cached(key, cached, condensed, now_ts):
                 return {**cached["data"], "cached": True}
 
-        if self.client is None or not self.client.is_configured() or self._circuit_open():
-            return build_deterministic_summary(condensed)
+        if not self._can_call_ai():
+            return {**cached["data"], "cached": True} if has_cached_data else build_deterministic_summary(condensed)
 
-        prompt_payload = {k: v for k, v in condensed.items() if k != "fingerprint"}
+        prompt_payload = self._build_snapshot(condensed)
         messages = [
             {"role": "system", "content": ADVISOR_SYSTEM_PROMPT},
             {
@@ -226,17 +298,19 @@ class FinancialAdvisor:
                     key,
                     {
                         "fingerprint": condensed["fingerprint"],
+                        "snapshot": prompt_payload,
                         "createdAt": now_ts,
-                        "expiresAt": now_ts + SUMMARY_TTL_SECONDS,
+                        "lastCheckedAt": now_ts,
+                        "nextCheckAt": now_ts + CHECK_INTERVAL_SECONDS,
                         "data": result,
                     },
                 )
             return {**result, "cached": False}
         except AiRateLimitError:
             self._trip_circuit()
-            return build_deterministic_summary(condensed)
+            return {**cached["data"], "cached": True} if has_cached_data else build_deterministic_summary(condensed)
         except (AiProviderError, Exception):
-            return build_deterministic_summary(condensed)
+            return {**cached["data"], "cached": True} if has_cached_data else build_deterministic_summary(condensed)
 
     def _normalize(self, raw: dict, condensed: dict) -> dict:
         headline = str(raw.get("headline") or "").strip()[:120]
