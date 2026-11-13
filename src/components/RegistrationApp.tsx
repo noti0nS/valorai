@@ -252,7 +252,7 @@ export default function RegistrationApp() {
     catch (e) { showError(e); setBotReset(v => v + 1); } finally { setBusy(false); }
   }
   async function logout() {
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setNotice('');
     try { await api('logout', {}); setAccount(null); setDashboard(null); setProfile(null); setView('login'); setValues(initial); setLessons([]); setInbox(null); }
     catch (e) { showError(e); } finally { setBusy(false); }
   }
@@ -399,8 +399,17 @@ export default function RegistrationApp() {
               : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}
           </div>
         </header>
-        <main id="main" className={view === 'deactivated' ? 'state-page' : 'auth'}>
-          <AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
+        <main id="main" className={view === 'deactivated' ? 'state-page' : loadingSession ? 'splash-loader' : 'auth'}>
+          {loadingSession ? (
+            <div className="splash-loader" role="status" aria-live="polite">
+              <div className="splash-mark" aria-hidden="true">
+                <span className="splash-ring" />
+                <ProductMark />
+              </div>
+              <p className="splash-label">Carregando seu espaço financeiro…</p>
+            </div>
+          ) : (
+          <><AnimatePresence mode="wait" initial={false}><motion.div key={`${view}-${view === 'register' ? step : ''}`} className={view === 'login' || view === 'register' || view === 'recovery' ? 'auth-form' : undefined} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onAnimationComplete={() => heading.current?.focus()}>
             {view === 'register' && <>
               {!editing && <div className="progress"><p className="progress-label" aria-hidden="true">Etapa {step + 1} de 4 · <strong>{stepNames[step]}</strong></p>
                 <ol aria-label="Etapas do cadastro">{stepNames.map((label, i) => <li key={label} className={i < step ? 'complete' : i === step ? 'current' : ''} aria-current={i === step ? 'step' : undefined}><span>{label}<span className="sr-only">{i < step ? ' (concluída)' : ''}</span></span></li>)}</ol></div>}
@@ -455,11 +464,11 @@ export default function RegistrationApp() {
               {noticeAlert}{errorAlert}
               <form onSubmit={login}><div className="fields-grid">
                 <Field label="CPF ou e-mail" id="identifier" wide><input id="identifier" autoComplete="username" required disabled={busy || loadingSession} value={identifier} onChange={e => setIdentifier(e.target.value)} /></Field>
-                <Field label="Senha" id="loginPassword" wide><div className="password-wrap"><input id="loginPassword" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required disabled={busy || loadingSession} maxLength={32} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field></div>
+                <Field label="Senha" id="loginPassword" wide><div className="password-wrap"><input id="loginPassword" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required disabled={busy || loadingSession} maxLength={32} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div><div className="field-forgot"><button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('recovery')}>Esqueci minha senha</button></div></Field></div>
                 {config?.siteKey && <div className="login-bot"><BotCheck siteKey={config.siteKey} onToken={setToken} reset={botReset} /></div>}
                 <div className="form-actions"><button className="button button-primary" disabled={busy || loadingSession || !config || (!!config.siteKey && !token)}>{busy || loadingSession ? <><LoaderCircle className="spin" size={18} />{loadingSession ? 'Carregando…' : 'Entrando…'}</> : <>Entrar na minha conta<ArrowRight size={18} /></>}</button></div>
               </form>
-              <p className="form-switch">Primeira vez aqui? <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('register')}>Criar minha conta</button> · <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('recovery')}>Esqueci minha senha</button></p>
+              <p className="form-switch">Primeira vez aqui? <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('register')}>Criar minha conta</button></p>
             </>}
             {view === 'recovery' && <>
               <div className="page-heading"><h1 ref={heading} tabIndex={-1}>Recuperar senha</h1><p>{recoveryStep === 0 ? 'Informe seu e-mail cadastrado para gerar um código de recuperação.' : 'Digite o código de 6 dígitos (validade de 15 min) e escolha sua nova senha.'}</p></div>
@@ -487,6 +496,8 @@ export default function RegistrationApp() {
           </motion.div></AnimatePresence>
           {(view === 'login' || view === 'register' || view === 'recovery') && <ProductPreview />}
           <div className="sr-only" aria-live="polite">{view === 'register' ? `Etapa ${step + 1} de 4: ${stepNames[step]}` : ''}</div>
+          </>
+          )}
         </main>
         <footer className="site-footer"><div><span>Uma iniciativa</span><CompanyMark /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
       </>
