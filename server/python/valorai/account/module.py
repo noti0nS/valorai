@@ -4,7 +4,7 @@ from valorai.account.validation import profile_update_from
 from valorai.crypto import sha256_hex
 from valorai.errors import ApiError
 from valorai.kv import PrefixKv
-from valorai.records import Account, Registration
+from valorai.records import Account, AccountStatus, Registration
 
 
 @dataclass
@@ -55,7 +55,7 @@ class AccountModule:
         now = self.clock.now()
         account = Account(
             id=self.accounts.next_id(), name=data.name, email=data.email, cpf=data.cpf,
-            password_hash=self.hasher.hash(data.password), status="pending", city=data.city, state=data.state,
+            password_hash=self.hasher.hash(data.password), status=AccountStatus.PENDING, city=data.city, state=data.state,
             birth_date=data.birth_date, phone=data.phone, postal_code=data.postal_code, created_at=now,
         )
         try:

@@ -118,7 +118,7 @@ export type AccountSummary = {
   email: string;
   city: string;
   state: string;
-  status: string;
+  status: 'pending' | 'demo_confirmed' | 'inactive';
   completed: boolean;
   finance: Finance | null;
   avatar?: string | null;
@@ -131,7 +131,7 @@ type ImportPreviewItem = {
   category: string;
   occurredOn: string;
   merchantDoc: string;
-  paymentMethod: string;
+  paymentMethod: DashboardTransaction['paymentMethod'];
   externalRef: string;
   isDuplicate: boolean;
 };

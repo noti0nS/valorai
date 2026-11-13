@@ -1,4 +1,50 @@
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class AccountStatus(StrEnum):
+    PENDING = "pending"
+    DEMO_CONFIRMED = "demo_confirmed"
+    INACTIVE = "inactive"
+
+
+class FinancialGoal(StrEnum):
+    BUDGET = "budget"
+    DEBT = "debt"
+    RESERVE = "reserve"
+    INVEST = "invest"
+
+
+class TransactionKind(StrEnum):
+    INCOME = "income"
+    FIXED_EXPENSE = "fixed_expense"
+    VARIABLE_EXPENSE = "variable_expense"
+
+
+class TransactionChannel(StrEnum):
+    MANUAL = "manual"
+    IMPORT = "import"
+    PHOTO = "photo"
+
+
+class TransactionStatus(StrEnum):
+    PAID = "paid"
+    PENDING = "pending"
+
+
+class PaymentMethod(StrEnum):
+    PIX = "pix"
+    CREDIT = "credit"
+    DEBIT = "debit"
+    CASH = "cash"
+    BOLETO = "boleto"
+    TRANSFER = "transfer"
+
+
+class LimitScope(StrEnum):
+    CATEGORY = "category"
+    DAILY = "daily"
+    CARD_SHARE = "card_share"
 
 
 @dataclass
@@ -8,7 +54,7 @@ class Account:
     email: str
     cpf: str
     password_hash: str
-    status: str
+    status: AccountStatus
     city: str
     state: str
     birth_date: str
@@ -17,7 +63,7 @@ class Account:
     created_at: int
     income: int | None = None
     fixed_expenses: int | None = None
-    goal: str | None = None
+    goal: FinancialGoal | None = None
     completed_at: int | None = None
     goal_target_cents: int = 500_000
     goal_current_cents: int = 0
@@ -56,12 +102,12 @@ class Transaction:
     account_id: str
     title: str
     amount_cents: int
-    kind: str
+    kind: TransactionKind
     category: str
-    channel: str
+    channel: TransactionChannel
     occurred_on: str
-    status: str = "paid"
-    payment_method: str = "debit"
+    status: TransactionStatus = TransactionStatus.PAID
+    payment_method: PaymentMethod = PaymentMethod.DEBIT
     merchant_doc: str | None = None
     confidence: int | None = None
     validated: bool = True
@@ -75,7 +121,7 @@ class Transaction:
 class BudgetLimit:
     id: str
     account_id: str
-    scope: str
+    scope: LimitScope
     category: str
     limit_cents: int
     warn_percent: int = 80

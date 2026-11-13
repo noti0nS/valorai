@@ -2,8 +2,9 @@ import math
 from decimal import Decimal, ROUND_HALF_UP
 
 from valorai.errors import ApiError
+from valorai.records import FinancialGoal
 
-GOALS = {"budget", "debt", "reserve", "invest"}
+GOALS = frozenset(FinancialGoal)
 MAX_REAIS = 100_000_000
 
 

@@ -4,7 +4,19 @@ import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from valorai.records import Account, BudgetLimit, ProfileUpdate, Transaction
+from valorai.records import (
+    Account,
+    AccountStatus,
+    BudgetLimit,
+    FinancialGoal,
+    LimitScope,
+    PaymentMethod,
+    ProfileUpdate,
+    Transaction,
+    TransactionChannel,
+    TransactionKind,
+    TransactionStatus,
+)
 
 
 @dataclass
@@ -246,9 +258,9 @@ def account_from(row) -> Account:
     row = as_dict(row, ACCOUNT_COLUMNS)
     return Account(
         id=row["id"], name=row["name"], email=row["email"], cpf=row["cpf"], password_hash=row["password_hash"],
-        status=row["status"], city=row["city"], state=row["state"], birth_date=row["birth_date"], phone=row["phone"],
+        status=AccountStatus(row["status"]), city=row["city"], state=row["state"], birth_date=row["birth_date"], phone=row["phone"],
         postal_code=row["postal_code"], created_at=row["created_at"], income=row["income"],
-        fixed_expenses=row["fixed_expenses"], goal=row["goal"], completed_at=row["completed_at"],
+        fixed_expenses=row["fixed_expenses"], goal=FinancialGoal(row["goal"]) if row["goal"] is not None else None, completed_at=row["completed_at"],
         goal_target_cents=int(row.get("goal_target_cents") if row.get("goal_target_cents") is not None else 500_000),
         goal_current_cents=int(row.get("goal_current_cents") if row.get("goal_current_cents") is not None else 0),
         goal_monthly_cents=int(row.get("goal_monthly_cents") if row.get("goal_monthly_cents") is not None else 75_000),
@@ -440,12 +452,12 @@ def transaction_from(row) -> Transaction:
         account_id=data["account_id"],
         title=data["title"],
         amount_cents=int(data["amount_cents"]),
-        kind=data["kind"],
+        kind=TransactionKind(data["kind"]),
         category=data["category"],
-        channel=data["channel"],
+        channel=TransactionChannel(data["channel"]),
         occurred_on=data["occurred_on"],
-        status=data["status"],
-        payment_method=data["payment_method"],
+        status=TransactionStatus(data["status"]),
+        payment_method=PaymentMethod(data["payment_method"]),
         merchant_doc=data.get("merchant_doc"),
         confidence=int(data["confidence"]) if data.get("confidence") is not None else None,
         validated=bool(data.get("validated", 1)),
@@ -461,7 +473,7 @@ def limit_from(row) -> BudgetLimit:
     return BudgetLimit(
         id=data["id"],
         account_id=data["account_id"],
-        scope=data["scope"],
+        scope=LimitScope(data["scope"]),
         category=data["category"],
         limit_cents=int(data["limit_cents"]),
         warn_percent=int(data["warn_percent"]),

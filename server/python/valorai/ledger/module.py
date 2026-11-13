@@ -7,7 +7,16 @@ from datetime import datetime
 from valorai.crypto import sha256_hex
 from valorai.errors import ApiError
 from valorai.finance.module import GOALS, to_cents, to_reais
-from valorai.records import Account, BudgetLimit, Transaction
+from valorai.records import (
+    Account,
+    BudgetLimit,
+    LimitScope,
+    PaymentMethod,
+    Transaction,
+    TransactionChannel,
+    TransactionKind,
+    TransactionStatus,
+)
 
 STANDARD_CATEGORIES = (
     "Alimentação & Mercado",
@@ -22,11 +31,11 @@ STANDARD_CATEGORIES = (
     "Outros",
 )
 
-KINDS = {"income", "fixed_expense", "variable_expense"}
-CHANNELS = {"manual", "import", "photo"}
-STATUSES = {"paid", "pending"}
-PAYMENT_METHODS = {"pix", "credit", "debit", "cash", "boleto", "transfer"}
-LIMIT_SCOPES = {"category", "daily", "card_share"}
+KINDS = frozenset(TransactionKind)
+CHANNELS = frozenset(TransactionChannel)
+STATUSES = frozenset(TransactionStatus)
+PAYMENT_METHODS = frozenset(PaymentMethod)
+LIMIT_SCOPES = frozenset(LimitScope)
 
 CATEGORY_RULES: tuple[tuple[tuple[str, ...], str, str | None], ...] = (
     (("aluguel", "condominio", "condomínio", "iptu", "financiamento", "habitacao", "habitação", "moradia"), "Moradia (Fixo)", "fixed_expense"),
@@ -383,12 +392,12 @@ class LedgerModule:
                 account_id=account.id,
                 title=item["title"],
                 amount_cents=item["amountCents"],
-                kind=item["kind"],
+                kind=TransactionKind(item["kind"]),
                 category=item["category"],
-                channel="import",
+                channel=TransactionChannel.IMPORT,
                 occurred_on=item["occurredOn"],
-                status="paid",
-                payment_method=item.get("paymentMethod", "debit"),
+                status=TransactionStatus.PAID,
+                payment_method=PaymentMethod(item.get("paymentMethod", PaymentMethod.DEBIT)),
                 merchant_doc=item.get("merchantDoc"),
                 confidence=95,
                 validated=True,
@@ -467,7 +476,7 @@ class LedgerModule:
         limit = BudgetLimit(
             id=self.ledger.next_id(),
             account_id=account.id,
-            scope=scope,
+            scope=LimitScope(scope),
             category=category,
             limit_cents=limit_cents,
             warn_percent=warn_percent,
@@ -930,12 +939,12 @@ class LedgerModule:
             account_id=account.id,
             title=title.strip(),
             amount_cents=amount_cents,
-            kind=kind,
+            kind=TransactionKind(kind),
             category=category,
-            channel=channel,
+            channel=TransactionChannel(channel),
             occurred_on=occurred_on,
-            status=status,
-            payment_method=payment_method,
+            status=TransactionStatus(status),
+            payment_method=PaymentMethod(payment_method),
             merchant_doc=merchant_doc,
             confidence=confidence,
             validated=validated,
