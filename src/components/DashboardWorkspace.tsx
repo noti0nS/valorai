@@ -42,7 +42,7 @@ export type DashboardLimit = {
   spent: number;
   percent: number;
   warnPercent: number;
-  status: 'ok' | 'warning' | 'exceeded';
+  status: 'ok' | 'warning' | 'reached' | 'exceeded';
   advisory: string;
   lessonId: string;
   title?: string;
@@ -170,11 +170,11 @@ const SAMPLE_OFX = `OFXHEADER:100
 </OFX>`;
 
 const SAMPLE_CSV = `Data;Descrição;Valor;Categoria;Tipo
-06/11/2026;Pão de Açúcar;-342,80;Alimentação & Mercado;Variável
+06/11/2026;Pão de Açúcar;-342,80;Alimentação;Variável
 04/11/2026;Uber do Brasil;-42,90;Transporte;Variável
-03/11/2026;Restaurante & Bistrô;-550,00;Lazer & Restaurantes;Variável
+03/11/2026;Restaurante & Bistrô;-550,00;Lazer;Variável
 02/11/2026;Livraria Cultura;-119,00;Educação;Variável
-01/11/2026;Consultoria & Serviços;+1200,00;Renda / Serviços;Receita`;
+01/11/2026;Consultoria & Serviços;+1200,00;Renda;Receita`;
 
 const currency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 const moneyFormat = { style: 'currency', currency: 'BRL' } as const;
@@ -507,7 +507,7 @@ export default function DashboardWorkspace({
   const [txTitle, setTxTitle] = useState('');
   const [txAmount, setTxAmount] = useState('');
   const [txKind, setTxKind] = useState<'income' | 'fixed_expense' | 'variable_expense'>('variable_expense');
-  const [txCategory, setTxCategory] = useState('Alimentação & Mercado');
+  const [txCategory, setTxCategory] = useState('Alimentação');
   const [txAutoCategory, setTxAutoCategory] = useState(true);
   const [txDate, setTxDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [txStatus, setTxStatus] = useState<'paid' | 'pending'>('paid');
@@ -538,7 +538,7 @@ export default function DashboardWorkspace({
 
   // Budget Limit State
   const [limitScope, setLimitScope] = useState<'category' | 'daily' | 'card_share'>('category');
-  const [limitCategory, setLimitCategory] = useState('Lazer & Restaurantes');
+  const [limitCategory, setLimitCategory] = useState('Lazer');
   const [limitValue, setLimitValue] = useState('600');
   const [limitWarn, setLimitWarn] = useState('80');
 
@@ -624,7 +624,7 @@ export default function DashboardWorkspace({
       setTxTitle('');
       setTxAmount('');
       setTxKind('variable_expense');
-      setTxCategory('Alimentação & Mercado');
+      setTxCategory('Alimentação');
       setTxAutoCategory(true);
       setTxDate(dashboard?.cycle.today ?? new Date().toISOString().slice(0, 10));
       setTxStatus('paid');
@@ -665,7 +665,7 @@ export default function DashboardWorkspace({
       setLimitWarn(String(lim.warnPercent));
     } else {
       setLimitScope('category');
-      setLimitCategory('Lazer & Restaurantes');
+      setLimitCategory('Lazer');
       setLimitValue('600');
       setLimitWarn('80');
     }
@@ -1437,7 +1437,7 @@ export default function DashboardWorkspace({
                         <h2 id="limit-card-title">{primaryLimit.category}</h2>
                       </div>
                       <span className={`limit-pct-badge num ${primaryLimit.status}`}>
-                        {primaryLimit.percent}%
+                        {primaryLimit.percent}%{primaryLimit.status === 'reached' ? ' · Atingido' : primaryLimit.status === 'exceeded' ? ' · Excedido' : ''}
                       </span>
                     </div>
                     <div className="limit-progress-wrap">
@@ -1690,7 +1690,7 @@ export default function DashboardWorkspace({
                             </small>
                           </div>
                           <div className="limit-item-right">
-                            <span className={`limit-pct-badge num ${lim.status}`}>{lim.percent}%</span>
+                            <span className={`limit-pct-badge num ${lim.status}`}>{lim.percent}%{lim.status === 'reached' ? ' · Atingido' : lim.status === 'exceeded' ? ' · Excedido' : ''}</span>
                             <button
                               type="button"
                               className="icon-button-xs"
@@ -2333,7 +2333,7 @@ export default function DashboardWorkspace({
                     value={limitCategory}
                     onChange={(e) => setLimitCategory(e.target.value)}
                   >
-                    {standardCategories.filter((c) => c !== 'Renda / Serviços').map((cat) => (
+                    {standardCategories.filter((c) => c !== 'Renda').map((cat) => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -2443,7 +2443,7 @@ export default function DashboardWorkspace({
               </span>
               <div className="avatar-picker-body">
                 <strong>Foto de perfil</strong>
-                <small>JPG ou PNG até 2 MB. Ela será recortada em formato quadrado.</small>
+                <small>JPG, PNG ou WebP até 2 MB. Ela será recortada em formato quadrado.</small>
                 <div className="avatar-picker-actions">
                   <label className="button button-secondary button-small" htmlFor="profAvatar">
                     {profAvatar ? 'Trocar foto' : 'Escolher foto'}
@@ -2458,7 +2458,7 @@ export default function DashboardWorkspace({
                   id="profAvatar"
                   className="sr-only"
                   type="file"
-                  accept="image/jpeg,image/png"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={async (e) => {
                     const input = e.currentTarget;
                     const file = input.files?.[0];

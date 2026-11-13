@@ -27,7 +27,8 @@ class Result:
 
 
 def _headers(set_cookie: str | None = None) -> dict[str, str]:
-    headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+    headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
+               "Strict-Transport-Security": "max-age=63072000; includeSubDomains"}
     if set_cookie is not None:
         headers["Set-Cookie"] = set_cookie
     return headers

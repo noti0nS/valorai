@@ -47,7 +47,7 @@ Nulfinance Inc. financial-management prototype: Astro + React 19 frontend, Djang
 - Financial capabilities (three ingestion channels, categories, limits/alerts, goals, guides) have no RF ids yet. The RF001–RF013 matrix and function-point table in the same DOCX use historical identifiers; neither maps onto the new RFs, and 88 PF is not the revised MVP size.
 - MVP has only the Client role: no backoffice, support/admin accounts or temporary internal passwords. Educational content is seeded by migration, not managed in a UI.
 - All three channels are essential: manual, CSV/Excel/OFX import, receipt photos. OFX was explicitly confirmed; Open Finance was not. Investments are optional and postposable — never require investor profiling.
-- Every transaction needs a category. Limits alert on reach/exceed and never block a payment or a save; R$100/day is a configurable example. Avatar is JPG/PNG up to 2 MB; receipt upload limits are undecided, as are native vs. mobile-first web, alert channels and alert latency.
+- Every transaction needs a category. Limits alert on reach/exceed and never block a payment or a save; R$100/day is a configurable example. Avatar is JPG/PNG/WebP up to 2 MB; receipt upload limits are undecided, as are native vs. mobile-first web, alert channels and alert latency.
 - Passwords use bcrypt (cost 10), not the early review's Argon2id. Confirmation and recovery codes are separate; recovery limits must not inherit confirmation limits. RF008 is still unimplemented.
 - Deactivation is logical deletion: preserve financial records, block login, revoke sessions. Reactivation, retention and erasure remain open; it does not establish LGPD compliance.
 

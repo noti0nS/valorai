@@ -49,7 +49,7 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   const manualDialog = page.getByRole('dialog');
   await expect(manualDialog).toBeVisible();
   await manualDialog.getByLabel('Descrição / Estabelecimento').fill('Restaurante Sabor Nordestino');
-  await expect(manualDialog.getByLabel('Categoria (obrigatória)')).toHaveValue('Lazer & Restaurantes');
+  await expect(manualDialog.getByLabel('Categoria (obrigatória)')).toHaveValue('Lazer');
   await manualDialog.getByLabel('Valor (R$)').fill('120');
   await manualDialog.getByRole('button', { name: 'Registrar lançamento' }).click();
   await expect(page.getByText('Restaurante Sabor Nordestino')).toBeVisible();
@@ -84,7 +84,7 @@ test('Stitch dashboard operational flow: 3 input channels, limits & non-blocking
   await page.getByRole('button', { name: 'Configurar teto de gastos' }).click();
   const limitDialog = page.getByRole('dialog');
   await expect(limitDialog).toBeVisible();
-  await limitDialog.getByLabel('Categoria monitorada').selectOption('Alimentação & Mercado');
+  await limitDialog.getByLabel('Categoria monitorada').selectOption('Alimentação');
   await limitDialog.getByLabel('Valor do teto (R$)').fill('500');
   await limitDialog.getByRole('button', { name: 'Salvar teto' }).click();
   await expect(page.getByText('Aviso de referência para disciplina orçamentária. Gastos não são bloqueados.')).toBeVisible();

@@ -16,10 +16,10 @@ def _confirmed_account(world):
 
 def test_category_auto_suggestion_and_mandatory_categorization(world):
     account = _confirmed_account(world)
-    assert suggest_category("Pão de Açúcar Supermercado")[0] == "Alimentação & Mercado"
+    assert suggest_category("Pão de Açúcar Supermercado")[0] == "Alimentação"
     assert suggest_category("Uber do Brasil")[0] == "Transporte"
-    assert suggest_category("Aluguel Residencial")[0] == "Moradia (Fixo)"
-    assert suggest_category("Consultoria Recebida", "income")[0] == "Renda / Serviços"
+    assert suggest_category("Aluguel Residencial")[0] == "Moradia"
+    assert suggest_category("Consultoria Recebida", "income")[0] == "Renda"
 
     dash = world["ledger"].handle_transaction(
         account,
@@ -28,7 +28,7 @@ def test_category_auto_suggestion_and_mandatory_categorization(world):
     )
     assert len(dash["transactions"]) == 1
     tx = dash["transactions"][0]
-    assert tx["category"] == "Alimentação & Mercado"
+    assert tx["category"] == "Alimentação"
     assert tx["amount"] == 342.8
     assert dash["summary"]["freeBalance"] == 2107.2
 
@@ -37,7 +37,7 @@ def test_budget_limits_trigger_non_blocking_alerts(world):
     account = _confirmed_account(world)
     world["ledger"].handle_limit(
         account,
-        {"action": "upsert", "scope": "category", "category": "Lazer & Restaurantes", "limit": 600, "warnPercent": 80},
+        {"action": "upsert", "scope": "category", "category": "Lazer", "limit": 600, "warnPercent": 80},
         "ip",
     )
     dash = world["ledger"].handle_transaction(
@@ -47,13 +47,13 @@ def test_budget_limits_trigger_non_blocking_alerts(world):
             "title": "Restaurante Jardins",
             "amount": 550,
             "kind": "variable_expense",
-            "category": "Lazer & Restaurantes",
+            "category": "Lazer",
         },
         "ip",
     )
     assert len(dash["alerts"]) == 1
     alert = dash["alerts"][0]
-    assert alert["category"] == "Lazer & Restaurantes"
+    assert alert["category"] == "Lazer"
     assert alert["percent"] == 92
     assert alert["status"] == "warning"
     assert "não são bloqueados" in alert["advisory"]
@@ -66,7 +66,7 @@ def test_budget_limits_trigger_non_blocking_alerts(world):
             "title": "Cinema IMAX",
             "amount": 90,
             "kind": "variable_expense",
-            "category": "Lazer & Restaurantes",
+            "category": "Lazer",
         },
         "ip",
     )
@@ -133,7 +133,7 @@ def test_receipt_ai_extraction_and_confirmation(world):
         "ip",
     )
     extracted = preview["extracted"]
-    assert extracted["category"] == "Alimentação & Mercado"
+    assert extracted["category"] == "Alimentação"
     assert extracted["amount"] == 342.8
     assert extracted["confidence"] >= 95
 
@@ -192,3 +192,39 @@ def test_rf003_profile_maintenance_and_rs001_isolation(world):
     assert ok_profile.body["account"]["name"] == "José Lucas Silva"
     assert ok_profile.body["profile"]["city"] == "Arapiraca"
     assert len(ok_profile.body["profile"]["history"]) == 1
+
+
+def test_limit_reports_reached_at_exactly_100_percent_and_never_blocks(world):
+    account = _confirmed_account(world)
+    world["ledger"].handle_limit(
+        account,
+        {"action": "upsert", "scope": "category", "category": "Lazer", "limit": 600, "warnPercent": 80},
+        "ip",
+    )
+    dash = world["ledger"].handle_transaction(
+        account,
+        {"action": "create", "title": "Show", "amount": 600, "kind": "variable_expense", "category": "Lazer"},
+        "ip",
+    )
+    assert dash["alerts"][0]["status"] == "reached"
+    assert dash["alerts"][0]["percent"] == 100
+    assert "atingido" in dash["alerts"][0]["title"].lower()
+    assert len(dash["transactions"]) == 1
+
+
+def test_non_standard_categories_are_rejected(world):
+    import pytest
+    from valorai.errors import ApiError
+
+    account = _confirmed_account(world)
+    with pytest.raises(ApiError) as error:
+        world["ledger"].handle_transaction(
+            account,
+            {"action": "create", "title": "Algo", "amount": 10, "kind": "variable_expense", "category": "Inventada"},
+            "ip",
+        )
+    assert error.value.status == 422
+    with pytest.raises(ApiError):
+        world["ledger"].handle_limit(
+            account, {"action": "upsert", "scope": "category", "category": "Inventada", "limit": 10}, "ip"
+        )

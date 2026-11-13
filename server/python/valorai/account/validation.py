@@ -10,7 +10,7 @@ STATES = {
     "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
 }
 MAX_AVATAR_BYTES = 2 * 1024 * 1024
-AVATAR_PREFIX = re.compile(r"^data:image/(?:jpeg|jpg|png);base64,([A-Za-z0-9+/=\s]+)$")
+AVATAR_PREFIX = re.compile(r"^data:image/(?:jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=\s]+)$")
 
 
 def digits(value: str) -> str:
@@ -140,7 +140,7 @@ def profile_update_from(body: dict, today: datetime, current_cpf: str) -> Profil
         elif isinstance(raw_avatar, str):
             match = AVATAR_PREFIX.match(raw_avatar.strip())
             if not match:
-                errors["avatar"] = "Envie uma imagem em JPG ou PNG."
+                errors["avatar"] = "Envie uma imagem em JPG, PNG ou WebP."
             else:
                 try:
                     decoded = base64.b64decode(match.group(1), validate=True)
@@ -152,7 +152,7 @@ def profile_update_from(body: dict, today: datetime, current_cpf: str) -> Profil
                 except Exception:
                     errors["avatar"] = "Não foi possível ler a imagem do avatar."
         else:
-            errors["avatar"] = "Envie uma imagem em JPG ou PNG."
+            errors["avatar"] = "Envie uma imagem em JPG, PNG ou WebP."
 
     if errors:
         raise ApiError(422, "Confira os campos destacados.", errors)

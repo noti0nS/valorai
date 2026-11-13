@@ -915,6 +915,7 @@ a { color: inherit; }
 
 .limits-stack { display: flex; flex-direction: column; gap: 12px; }
 .limit-item-box.warning { background: var(--amber-tint); border-color: var(--amber-line); }
+.limit-item-box.reached,
 .limit-item-box.exceeded { background: var(--red-tint); border-color: var(--red-line); }
 .limit-item-box { padding: 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--wash); display: flex; flex-direction: column; gap: 10px; }
 .limit-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -940,6 +941,7 @@ a { color: inherit; }
   color: var(--accent);
 }
 .limit-pct-badge.warning,
+.limit-pct-badge.reached,
 .limit-pct-badge.exceeded {
   background: var(--red-tint);
   border: 1px solid var(--red-line);

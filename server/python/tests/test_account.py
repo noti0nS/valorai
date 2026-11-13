@@ -75,3 +75,11 @@ def test_deactivation_keeps_finance_and_drops_sessions(world):
 def pytest_raises(error):
     import pytest
     return pytest.raises(error)
+
+
+def test_avatar_accepts_jpg_png_and_webp_only():
+    from valorai.account.validation import AVATAR_PREFIX
+
+    for mime in ("jpeg", "png", "webp"):
+        assert AVATAR_PREFIX.match(f"data:image/{mime};base64,AAAA")
+    assert not AVATAR_PREFIX.match("data:image/gif;base64,AAAA")

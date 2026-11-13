@@ -24,12 +24,12 @@ def test_sql_store_uses_the_existing_schema_and_keeps_finance_after_deactivation
     ledger = LedgerModule(SqlLedger(db), accounts, lessons, clock, audit)
     ledger.handle_transaction(
         updated_acc,
-        {"action": "create", "title": "Supermercado", "amount": 150.0, "kind": "variable_expense", "category": "Alimentação & Mercado"},
+        {"action": "create", "title": "Supermercado", "amount": 150.0, "kind": "variable_expense", "category": "Alimentação"},
         "ip",
     )
     ledger.handle_limit(
         updated_acc,
-        {"action": "upsert", "scope": "category", "category": "Alimentação & Mercado", "limit": 500.0},
+        {"action": "upsert", "scope": "category", "category": "Alimentação", "limit": 500.0},
         "ip",
     )
     ledger.handle_lesson_progress(updated_acc, {"lessonId": "first-budget", "progressPercent": 100}, "ip")
@@ -105,7 +105,7 @@ def _events(db):
 def test_triggers_record_data_changes_with_the_bound_request_context():
     db, audit, _account, ledger, created = _sql_world()
     audit.bind("hash-1", NOW + 5)
-    payload = {"action": "create", "title": "Mercado", "amount": 10.0, "kind": "variable_expense", "category": "Alimentação & Mercado"}
+    payload = {"action": "create", "title": "Mercado", "amount": 10.0, "kind": "variable_expense", "category": "Alimentação"}
     ledger.handle_transaction(created, payload, "hash-1")
     tx_id = ledger.ledger.list_transactions(created.id)[0].id
     ledger.handle_transaction(created, {"action": "toggle_status", "id": tx_id}, "hash-1")
@@ -200,7 +200,7 @@ def test_typing_the_aporte_marker_does_not_touch_the_goal_and_flag_is_immutable(
     audit.bind("h", NOW)
     ledger.handle_transaction(created, {
         "action": "create", "title": "Manual", "amount": 40.0, "kind": "variable_expense",
-        "category": "Reserva & Investimentos", "merchantDoc": "APORTE.META",
+        "category": "Investimentos", "merchantDoc": "APORTE.META",
     }, "h")
     assert _goal_cents(db, created.id) == 0
     tx_id = ledger.ledger.list_transactions(created.id)[0].id
@@ -244,14 +244,14 @@ def test_views_aggregate_financial_summary_and_monthly_category_spending():
     }, "h")
     ledger.handle_transaction(created, {
         "action": "create", "title": "Mercado", "amount": 250.0, "kind": "variable_expense",
-        "category": "Alimentação & Mercado", "occurredOn": "2026-10-10", "status": "paid",
+        "category": "Alimentação", "occurredOn": "2026-10-10", "status": "paid",
     }, "h")
     ledger.handle_transaction(created, {
         "action": "create", "title": "Feira", "amount": 50.0, "kind": "variable_expense",
-        "category": "Alimentação & Mercado", "occurredOn": "2026-10-15", "status": "pending",
+        "category": "Alimentação", "occurredOn": "2026-10-15", "status": "pending",
     }, "h")
     ledger.handle_limit(created, {
-        "action": "upsert", "scope": "category", "category": "Alimentação & Mercado", "limit": 600.0,
+        "action": "upsert", "scope": "category", "category": "Alimentação", "limit": 600.0,
     }, "h")
 
     summary = db.query(
@@ -274,7 +274,7 @@ def test_views_aggregate_financial_summary_and_monthly_category_spending():
     )[0]
     assert spending == {
         "year_month": "2026-10",
-        "category": "Alimentação & Mercado",
+        "category": "Alimentação",
         "expense_count": 2,
         "spent_cents": 30000,
         "limit_cents": 60000,

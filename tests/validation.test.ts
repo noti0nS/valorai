@@ -32,14 +32,14 @@ test('financial estimates permit zero and deficits but reject invalid amounts', 
   for (const income of [-1, NaN, Infinity]) assert.equal(financeSchema.safeParse({ income, fixedExpenses: 0, goal: 'budget' }).success, false);
 });
 test('auto-classification suggests standard categories and transaction schema requires category', () => {
-  assert.deepEqual(suggestCategory('Pão de Açúcar Supermercado'), { category: 'Alimentação & Mercado', kind: 'variable_expense' });
-  assert.deepEqual(suggestCategory('Aluguel apartamento'), { category: 'Moradia (Fixo)', kind: 'fixed_expense' });
-  assert.deepEqual(suggestCategory('Salário mensal', 'income'), { category: 'Renda / Serviços', kind: 'income' });
+  assert.deepEqual(suggestCategory('Pão de Açúcar Supermercado'), { category: 'Alimentação', kind: 'variable_expense' });
+  assert.deepEqual(suggestCategory('Aluguel apartamento'), { category: 'Moradia', kind: 'fixed_expense' });
+  assert.deepEqual(suggestCategory('Salário mensal', 'income'), { category: 'Renda', kind: 'income' });
   assert.equal(transactionSchema.safeParse({
     title: 'Supermercado',
     amount: 186.4,
     kind: 'variable_expense',
-    category: 'Alimentação & Mercado',
+    category: 'Alimentação',
     occurredOn: '2026-10-29',
   }).success, true);
   assert.equal(transactionSchema.safeParse({

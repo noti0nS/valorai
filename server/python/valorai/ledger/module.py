@@ -19,15 +19,15 @@ from valorai.records import (
 )
 
 STANDARD_CATEGORIES = (
-    "Alimentação & Mercado",
-    "Moradia (Fixo)",
+    "Alimentação",
+    "Moradia",
     "Transporte",
-    "Lazer & Restaurantes",
+    "Lazer",
     "Educação",
     "Saúde",
-    "Contas & Serviços",
-    "Renda / Serviços",
-    "Reserva & Investimentos",
+    "Serviços",
+    "Renda",
+    "Investimentos",
     "Outros",
 )
 
@@ -38,15 +38,15 @@ PAYMENT_METHODS = frozenset(PaymentMethod)
 LIMIT_SCOPES = frozenset(LimitScope)
 
 CATEGORY_RULES: tuple[tuple[tuple[str, ...], str, str | None], ...] = (
-    (("aluguel", "condominio", "condomínio", "iptu", "financiamento", "habitacao", "habitação", "moradia"), "Moradia (Fixo)", "fixed_expense"),
-    (("energia", "conta de luz", "eletricidade", "agua", "água", "saneamento", "internet", "fibra", " Vivo ", "claro", "tim", "gas", "gás", "seguro"), "Contas & Serviços", "fixed_expense"),
-    (("pao de acucar", "pão de açúcar", "supermercado", "mercado", "atacadao", "atacadão", "assai", "assaí", "carrefour", "padaria", "hortifruti", "feira", "açougue"), "Alimentação & Mercado", "variable_expense"),
+    (("aluguel", "condominio", "condomínio", "iptu", "financiamento", "habitacao", "habitação", "moradia"), "Moradia", "fixed_expense"),
+    (("energia", "conta de luz", "eletricidade", "agua", "água", "saneamento", "internet", "fibra", " Vivo ", "claro", "tim", "gas", "gás", "seguro"), "Serviços", "fixed_expense"),
+    (("pao de acucar", "pão de açúcar", "supermercado", "mercado", "atacadao", "atacadão", "assai", "assaí", "carrefour", "padaria", "hortifruti", "feira", "açougue"), "Alimentação", "variable_expense"),
     (("uber", "99pop", "99app", "taxi", "táxi", "combustivel", "combustível", "posto", "ipiranga", "shell", "metro", "metrô", "onibus", "ônibus", "pedagio", "pedágio", "estacionamento"), "Transporte", "variable_expense"),
-    (("restaurante", "bistro", "bistrô", "ifood", "lazer", "cinema", "teatro", "show", "bar", "café", "cafeteria", "viagem", "hotel", "streaming", "netflix", "spotify"), "Lazer & Restaurantes", "variable_expense"),
+    (("restaurante", "bistro", "bistrô", "ifood", "lazer", "cinema", "teatro", "show", "bar", "café", "cafeteria", "viagem", "hotel", "streaming", "netflix", "spotify"), "Lazer", "variable_expense"),
     (("livraria", "cultura", "livro", "curso", "faculdade", "escola", "mensalidade escolar", "idioma", "udemy", "alura", "educacao", "educação"), "Educação", "variable_expense"),
     (("farmacia", "farmácia", "drogasil", "droga raia", "pague menos", "hospital", "clinica", "clínica", "consulta", "exame", "medico", "médico", "dentista", "plano de saude", "plano de saúde"), "Saúde", "variable_expense"),
-    (("reserva", "tesouro", "cdb", "lci", "lca", "fii", "acoes", "ações", "investimento", "aporte", "poupanca", "poupança"), "Reserva & Investimentos", "variable_expense"),
-    (("salario", "salário", "consultoria", "freelance", "pro-labore", "pró-labore", "dividendo", "rendimento", "reembolso", "receita", "transferencia recebida", "transferência recebida", "pix recebido"), "Renda / Serviços", "income"),
+    (("reserva", "tesouro", "cdb", "lci", "lca", "fii", "acoes", "ações", "investimento", "aporte", "poupanca", "poupança"), "Investimentos", "variable_expense"),
+    (("salario", "salário", "consultoria", "freelance", "pro-labore", "pró-labore", "dividendo", "rendimento", "reembolso", "receita", "transferencia recebida", "transferência recebida", "pix recebido"), "Renda", "income"),
 )
 
 GOAL_LABELS = {
@@ -62,18 +62,26 @@ MONTH_NAMES_PT = (
 )
 
 
+def standard_category(raw: object) -> str | None:
+    """Return the canonical category matching ``raw`` (case-insensitive), or None when it is not standard."""
+    if not isinstance(raw, str):
+        return None
+    wanted = raw.strip().casefold()
+    return next((c for c in STANDARD_CATEGORIES if c.casefold() == wanted), None)
+
+
 def suggest_category(title: str, kind: str | None = None) -> tuple[str, str]:
     normalized = f" {title.strip().lower()} "
     for keywords, category, suggested_kind in CATEGORY_RULES:
         if any(keyword.lower() in normalized for keyword in keywords):
             resolved_kind = kind if kind in KINDS else (suggested_kind or "variable_expense")
             if resolved_kind == "income":
-                return "Renda / Serviços", "income"
+                return "Renda", "income"
             return category, resolved_kind
     if kind == "income":
-        return "Renda / Serviços", "income"
+        return "Renda", "income"
     if kind == "fixed_expense":
-        return "Moradia (Fixo)", "fixed_expense"
+        return "Moradia", "fixed_expense"
     return "Outros", kind if kind in KINDS else "variable_expense"
 
 
@@ -204,8 +212,8 @@ class LedgerModule:
                 f"Seus compromissos e despesas superam a renda planejada em R$ {self._fmt_brl(abs(free_balance_cents))}. "
                 f"Revise gastos variáveis ou ajuste os tetos de categoria para recuperar margem neste ciclo."
             )
-        elif any(a["status"] == "exceeded" for a in alerts):
-            top_alert = next(a for a in alerts if a["status"] == "exceeded")
+        elif any(a["status"] in {"reached", "exceeded"} for a in alerts):
+            top_alert = next(a for a in alerts if a["status"] in {"reached", "exceeded"})
             status_badge = "Atenção ao ritmo"
             status_tone = "warning"
             insight_msg = (
@@ -324,8 +332,13 @@ class LedgerModule:
             if existing is None:
                 raise ApiError(404, "Lançamento não encontrado.")
             new_category = payload.get("category")
-            cat = new_category.strip() if isinstance(new_category, str) and new_category.strip() else existing.category
-            updated = replace(existing, validated=True, category=cat[:60])
+            if isinstance(new_category, str) and new_category.strip():
+                cat = standard_category(new_category)
+                if cat is None:
+                    raise ApiError(422, "Selecione uma das categorias padronizadas.", {"category": "Categoria inválida."})
+            else:
+                cat = existing.category
+            updated = replace(existing, validated=True, category=cat)
             self.ledger.update_transaction(updated)
             return self.present_dashboard(account)
         if action == "toggle_status":
@@ -460,7 +473,12 @@ class LedgerModule:
             category = "Teto Diário"
         elif scope == "card_share" and not category:
             category = "Supérfluos no Cartão"
-        if not (2 <= len(category) <= 60):
+        if scope == "category":
+            canonical = standard_category(category)
+            if canonical is None:
+                raise ApiError(422, "Selecione uma das categorias padronizadas.", {"category": "Categoria inválida."})
+            category = canonical
+        elif not (2 <= len(category) <= 60):
             raise ApiError(422, "Informe a categoria ou identificação do limite.", {"category": "Informe a categoria."})
 
         limit_cents = to_cents(payload.get("limit"))
@@ -529,7 +547,7 @@ class LedgerModule:
                     title=f"Aporte — {GOAL_LABELS.get(account.goal or 'reserve', 'Reserva Financeira')}",
                     amount_cents=contribution_cents,
                     kind="variable_expense",
-                    category="Reserva & Investimentos",
+                    category="Investimentos",
                     channel="manual",
                     occurred_on=self.clock.today().date().isoformat(),
                     status="paid",
@@ -565,12 +583,12 @@ class LedgerModule:
         today_dt = self.clock.today()
         ym = f"{today_dt.year}-{today_dt.month:02d}"
         sample_rows = [
-            ("Pão de Açúcar • Supermercado", 34280, "variable_expense", "Alimentação & Mercado", "photo", f"{ym}-06", "credit", "NFC-e #4492", 99, "seed-pao-acucar"),
-            ("Aluguel & Condomínio", 240000, "fixed_expense", "Moradia (Fixo)", "import", f"{ym}-05", "debit", "DEB.AUTOMATICO", 100, "seed-aluguel"),
+            ("Pão de Açúcar • Supermercado", 34280, "variable_expense", "Alimentação", "photo", f"{ym}-06", "credit", "NFC-e #4492", 99, "seed-pao-acucar"),
+            ("Aluguel & Condomínio", 240000, "fixed_expense", "Moradia", "import", f"{ym}-05", "debit", "DEB.AUTOMATICO", 100, "seed-aluguel"),
             ("Uber do Brasil", 4290, "variable_expense", "Transporte", "photo", f"{ym}-04", "pix", "RECIBO-IA", 98, "seed-uber"),
             ("Livraria Cultura", 11900, "variable_expense", "Educação", "manual", f"{ym}-02", "credit", "MANUAL-WEB", None, "seed-livraria"),
-            ("Restaurante & Bistrô", 55000, "variable_expense", "Lazer & Restaurantes", "photo", f"{ym}-03", "credit", "NFC-e #8821", 97, "seed-lazer"),
-            ("Consultoria & Serviços", 120000, "income", "Renda / Serviços", "import", f"{ym}-01", "pix", "PIX.RECEBIDO", 100, "seed-consultoria"),
+            ("Restaurante & Bistrô", 55000, "variable_expense", "Lazer", "photo", f"{ym}-03", "credit", "NFC-e #8821", 97, "seed-lazer"),
+            ("Consultoria & Serviços", 120000, "income", "Renda", "import", f"{ym}-01", "pix", "PIX.RECEBIDO", 100, "seed-consultoria"),
         ]
         for title, cents, kind, cat, channel, date_str, method, doc, conf, ref in sample_rows:
             if not self.ledger.has_external_ref(account.id, ref):
@@ -598,7 +616,7 @@ class LedgerModule:
                 id=self.ledger.next_id(),
                 account_id=account.id,
                 scope="category",
-                category="Lazer & Restaurantes",
+                category="Lazer",
                 limit_cents=60_000,
                 warn_percent=80,
                 created_at=now,
@@ -643,7 +661,7 @@ class LedgerModule:
             explicit_kind = row.get("kind")
             explicit_cat = str(row.get("category") or "").strip()
             suggested_cat, inferred_kind = suggest_category(title, explicit_kind if explicit_kind in KINDS else None)
-            category = explicit_cat if explicit_cat else suggested_cat
+            category = standard_category(explicit_cat) or suggested_cat
             kind = explicit_kind if explicit_kind in KINDS else inferred_kind
             ext_ref = str(row.get("externalRef") or sha256_hex(f"{occurred_on}:{title.lower()}:{amount_cents}:{kind}")[:24])
             is_dup = ext_ref in seen_refs or self.ledger.has_external_ref(account.id, ext_ref)
@@ -675,7 +693,7 @@ class LedgerModule:
             kind = str(raw.get("kind") or "")
             cat = str(raw.get("category") or "").strip()
             suggested_cat, inferred_kind = suggest_category(title, kind if kind in KINDS else None)
-            resolved_cat = cat if cat else suggested_cat
+            resolved_cat = standard_category(cat) or suggested_cat
             resolved_kind = kind if kind in KINDS else inferred_kind
             ext_ref = str(raw.get("externalRef") or sha256_hex(f"{occurred_on}:{title.lower()}:{amount_cents}:{resolved_kind}")[:24])
             results.append({
@@ -791,7 +809,7 @@ class LedgerModule:
                 "title": raw_title,
                 "amountCents": cents,
                 "kind": resolved_kind,
-                "category": raw_cat or cat,
+                "category": standard_category(raw_cat) or cat,
                 "occurredOn": valid_iso_date(raw_date) or self.clock.today().date().isoformat(),
                 "merchantDoc": "Planilha CSV/Excel",
             })
@@ -818,7 +836,7 @@ class LedgerModule:
                 "title": "Pão de Açúcar • Supermercado",
                 "amount": 342.80,
                 "kind": "variable_expense",
-                "category": "Alimentação & Mercado",
+                "category": "Alimentação",
                 "occurredOn": today_iso,
                 "paymentMethod": "credit",
                 "merchantDoc": "CNPJ 47.508.411/0001-56 • NFC-e #4492",
@@ -840,7 +858,7 @@ class LedgerModule:
                 "title": "Bistrô & Restaurante Jardins",
                 "amount": 128.50,
                 "kind": "variable_expense",
-                "category": "Lazer & Restaurantes",
+                "category": "Lazer",
                 "occurredOn": today_iso,
                 "paymentMethod": "credit",
                 "merchantDoc": "CNPJ 23.410.992/0001-11 • NFC-e #9104",
@@ -900,7 +918,10 @@ class LedgerModule:
 
         raw_category = payload.get("category")
         if isinstance(raw_category, str) and raw_category.strip() and raw_category.strip().lower() != "auto":
-            category = raw_category.strip()[:60]
+            category = standard_category(raw_category)
+            if category is None:
+                errors["category"] = "Selecione uma das categorias padronizadas."
+                category = "Outros"
         elif isinstance(title, str) and title.strip():
             category, inferred_kind = suggest_category(title, kind if raw_kind in KINDS else None)
             if raw_kind not in KINDS:
@@ -988,8 +1009,10 @@ class LedgerModule:
                 percent = round(spent_cents / lim.limit_cents * 100) if lim.limit_cents > 0 else 0
                 lesson_id = "first-budget"
 
-            if percent >= 100:
+            if lim.limit_cents > 0 and spent_cents > lim.limit_cents:
                 status = "exceeded"
+            elif lim.limit_cents > 0 and spent_cents == lim.limit_cents:
+                status = "reached"
             elif percent >= lim.warn_percent:
                 status = "warning"
             else:
@@ -1009,14 +1032,14 @@ class LedgerModule:
                 "lessonId": lesson_id,
             }
             evaluated.append(item)
-            if status in {"warning", "exceeded"}:
+            if status in {"warning", "reached", "exceeded"}:
                 alerts.append({
                     **item,
-                    "title": (
-                        f"Limite atingido em {lim.category}"
-                        if status == "exceeded"
-                        else f"Aviso preventivo: {lim.category}"
-                    ),
+                    "title": {
+                        "exceeded": f"Limite excedido em {lim.category}",
+                        "reached": f"Limite atingido em {lim.category}",
+                        "warning": f"Aviso preventivo: {lim.category}",
+                    }[status],
                     "actionLabel": "Ajustar Teto",
                 })
 

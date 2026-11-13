@@ -56,15 +56,15 @@ export const financeSchema = z.object({
   goal: z.enum(['budget','debt','reserve','invest']),
 });
 export const standardCategories = [
-  'Alimentação & Mercado',
-  'Moradia (Fixo)',
+  'Alimentação',
+  'Moradia',
   'Transporte',
-  'Lazer & Restaurantes',
+  'Lazer',
   'Educação',
   'Saúde',
-  'Contas & Serviços',
-  'Renda / Serviços',
-  'Reserva & Investimentos',
+  'Serviços',
+  'Renda',
+  'Investimentos',
   'Outros',
 ] as const;
 
@@ -84,15 +84,15 @@ export const paymentMethods = [
 ] as const;
 
 const categoryRules: Array<{ keywords: string[]; category: string; kind: 'income' | 'fixed_expense' | 'variable_expense' }> = [
-  { keywords: ['aluguel', 'condominio', 'condomínio', 'iptu', 'financiamento', 'habitacao', 'habitação', 'moradia'], category: 'Moradia (Fixo)', kind: 'fixed_expense' },
-  { keywords: ['energia', 'conta de luz', 'eletricidade', 'agua', 'água', 'saneamento', 'internet', 'fibra', 'claro', 'tim', 'vivo', 'gás', 'seguro'], category: 'Contas & Serviços', kind: 'fixed_expense' },
-  { keywords: ['pao de acucar', 'pão de açúcar', 'supermercado', 'mercado', 'atacadao', 'atacadão', 'assai', 'assaí', 'carrefour', 'padaria', 'hortifruti', 'feira'], category: 'Alimentação & Mercado', kind: 'variable_expense' },
+  { keywords: ['aluguel', 'condominio', 'condomínio', 'iptu', 'financiamento', 'habitacao', 'habitação', 'moradia'], category: 'Moradia', kind: 'fixed_expense' },
+  { keywords: ['energia', 'conta de luz', 'eletricidade', 'agua', 'água', 'saneamento', 'internet', 'fibra', 'claro', 'tim', 'vivo', 'gás', 'seguro'], category: 'Serviços', kind: 'fixed_expense' },
+  { keywords: ['pao de acucar', 'pão de açúcar', 'supermercado', 'mercado', 'atacadao', 'atacadão', 'assai', 'assaí', 'carrefour', 'padaria', 'hortifruti', 'feira'], category: 'Alimentação', kind: 'variable_expense' },
   { keywords: ['uber', '99pop', '99app', 'taxi', 'táxi', 'combustivel', 'combustível', 'posto', 'ipiranga', 'shell', 'metro', 'metrô', 'onibus', 'ônibus', 'estacionamento'], category: 'Transporte', kind: 'variable_expense' },
-  { keywords: ['restaurante', 'bistro', 'bistrô', 'ifood', 'lazer', 'cinema', 'teatro', 'show', 'bar', 'café', 'cafeteria', 'viagem', 'hotel', 'netflix', 'spotify'], category: 'Lazer & Restaurantes', kind: 'variable_expense' },
+  { keywords: ['restaurante', 'bistro', 'bistrô', 'ifood', 'lazer', 'cinema', 'teatro', 'show', 'bar', 'café', 'cafeteria', 'viagem', 'hotel', 'netflix', 'spotify'], category: 'Lazer', kind: 'variable_expense' },
   { keywords: ['livraria', 'cultura', 'livro', 'curso', 'faculdade', 'escola', 'idioma', 'udemy', 'alura', 'educacao', 'educação'], category: 'Educação', kind: 'variable_expense' },
   { keywords: ['farmacia', 'farmácia', 'drogasil', 'droga raia', 'hospital', 'clinica', 'clínica', 'consulta', 'exame', 'medico', 'médico', 'dentista', 'plano de saude', 'plano de saúde'], category: 'Saúde', kind: 'variable_expense' },
-  { keywords: ['reserva', 'tesouro', 'cdb', 'lci', 'lca', 'fii', 'acoes', 'ações', 'investimento', 'aporte', 'poupanca', 'poupança'], category: 'Reserva & Investimentos', kind: 'variable_expense' },
-  { keywords: ['salario', 'salário', 'consultoria', 'freelance', 'dividendo', 'rendimento', 'reembolso', 'receita', 'pix recebido', 'transferencia recebida', 'transferência recebida'], category: 'Renda / Serviços', kind: 'income' },
+  { keywords: ['reserva', 'tesouro', 'cdb', 'lci', 'lca', 'fii', 'acoes', 'ações', 'investimento', 'aporte', 'poupanca', 'poupança'], category: 'Investimentos', kind: 'variable_expense' },
+  { keywords: ['salario', 'salário', 'consultoria', 'freelance', 'dividendo', 'rendimento', 'reembolso', 'receita', 'pix recebido', 'transferencia recebida', 'transferência recebida'], category: 'Renda', kind: 'income' },
 ];
 
 export function suggestCategory(title: string, currentKind?: 'income' | 'fixed_expense' | 'variable_expense'): { category: string; kind: 'income' | 'fixed_expense' | 'variable_expense' } {
@@ -100,11 +100,11 @@ export function suggestCategory(title: string, currentKind?: 'income' | 'fixed_e
   for (const rule of categoryRules) {
     if (rule.keywords.some((kw) => normalized.includes(kw))) {
       const kind = currentKind ?? rule.kind;
-      return { category: kind === 'income' ? 'Renda / Serviços' : rule.category, kind };
+      return { category: kind === 'income' ? 'Renda' : rule.category, kind };
     }
   }
-  if (currentKind === 'income') return { category: 'Renda / Serviços', kind: 'income' };
-  if (currentKind === 'fixed_expense') return { category: 'Moradia (Fixo)', kind: 'fixed_expense' };
+  if (currentKind === 'income') return { category: 'Renda', kind: 'income' };
+  if (currentKind === 'fixed_expense') return { category: 'Moradia', kind: 'fixed_expense' };
   return { category: 'Outros', kind: currentKind ?? 'variable_expense' };
 }
 
