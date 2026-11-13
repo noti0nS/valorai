@@ -1,5 +1,6 @@
 ---
 import RegistrationApp from '../components/RegistrationApp';
+import { PwaInstall } from '../components/PwaInstall';
 import '../styles/global.css';
 import '@fontsource-variable/instrument-sans';
 ---
@@ -23,11 +24,16 @@ import '@fontsource-variable/instrument-sans';
     <meta name="description" content="Seu dinheiro com mais clareza. Conheça o protótipo de cadastro do ValorAI, seu espaço para uma vida financeira em equilíbrio." />
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ValorAI" />
     <title>ValorAI</title>
   </head>
   <body>
     <a class="skip-link" href="#main">Pular para o conteúdo</a>
     <RegistrationApp client:load />
+    <PwaInstall client:load />
     <noscript>Este protótipo precisa de JavaScript para o formulário interativo.</noscript>
   </body>
 </html>
