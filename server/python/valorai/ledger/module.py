@@ -4,6 +4,8 @@ import re
 from dataclasses import replace
 from datetime import datetime
 
+from valorai.ai.advisor import FinancialAdvisor, build_deterministic_summary, compute_deterministic_context
+from valorai.ai.receipt import AiReceiptExtractor
 from valorai.crypto import sha256_hex
 from valorai.errors import ApiError
 from valorai.finance.module import GOALS, to_cents, to_reais
@@ -136,12 +138,14 @@ def parse_Flexible_amount(raw: object) -> tuple[int | None, str]:
 
 
 class LedgerModule:
-    def __init__(self, ledger, accounts, lessons, clock, audit):
+    def __init__(self, ledger, accounts, lessons, clock, audit, receipt_extractor: AiReceiptExtractor | None = None, advisor: FinancialAdvisor | None = None):
         self.ledger = ledger
         self.accounts = accounts
         self.lessons = lessons
         self.clock = clock
         self.audit = audit
+        self.receipt_extractor = receipt_extractor
+        self.advisor = advisor
 
     def present_dashboard(self, account: Account) -> dict:
         transactions = self.ledger.list_transactions(account.id)
@@ -247,7 +251,7 @@ class LedgerModule:
             for lesson in self.lessons.list()
         ]
 
-        return {
+        dashboard_payload = {
             "cycle": {
                 "label": cycle_label,
                 "code": f"{today_dt.year}.{today_dt.month:02d}",
@@ -294,6 +298,14 @@ class LedgerModule:
             "categoryBreakdown": category_breakdown,
             "lessons": lessons_with_progress,
         }
+        condensed = compute_deterministic_context(dashboard_payload)
+        if self.advisor is not None:
+            ai_summary, needs_refresh = self.advisor.get_cached_or_fallback(account.id, condensed)
+        else:
+            ai_summary, needs_refresh = build_deterministic_summary(condensed), False
+        dashboard_payload["aiSummary"] = ai_summary
+        dashboard_payload["aiSummaryNeedsRefresh"] = needs_refresh
+        return dashboard_payload
 
     def present_transaction(self, tx: Transaction) -> dict:
         return {
@@ -449,10 +461,35 @@ class LedgerModule:
         file_name = str(payload.get("fileName") or "comprovante-nfce.jpg").strip()
         text_hint = str(payload.get("textHint") or "").strip()
         preset = str(payload.get("preset") or "").strip().lower()
+        image_data = payload.get("imageData") if isinstance(payload.get("imageData"), str) else None
         today_iso = self.clock.today().date().isoformat()
 
-        extracted = self._extract_receipt_metadata(file_name, text_hint, preset, today_iso)
+        fallback_fn = lambda: self._extract_receipt_metadata(file_name, text_hint, preset, today_iso)
+        if self.receipt_extractor is not None and not preset:
+            extracted = self.receipt_extractor.extract(
+                file_name=file_name,
+                text_hint=text_hint,
+                image_data_url=image_data,
+                today_iso=today_iso,
+                categories=STANDARD_CATEGORIES,
+                standard_category_fn=standard_category,
+                suggest_category_fn=suggest_category,
+                valid_iso_date_fn=valid_iso_date,
+                fallback_fn=fallback_fn,
+            )
+        else:
+            extracted = {**fallback_fn(), "source": "fallback"}
         return {"extracted": extracted}
+
+    def handle_ai_summary(self, account: Account, payload: dict | None = None) -> dict:
+        dashboard_data = self.present_dashboard(account)
+        condensed = compute_deterministic_context(dashboard_data)
+        force = bool(payload.get("force", False)) if isinstance(payload, dict) else False
+        if self.advisor is not None:
+            ai_summary = self.advisor.generate_summary(account.id, condensed, force=force)
+        else:
+            ai_summary = build_deterministic_summary(condensed)
+        return {"aiSummary": ai_summary}
 
     def handle_limit(self, account: Account, payload: dict, ip_hash: str) -> dict:
         if not isinstance(payload, dict):

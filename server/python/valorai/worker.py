@@ -25,6 +25,7 @@ from django.core.wsgi import get_wsgi_application
 from workers import DurableObject, WorkerEntrypoint, wsgi
 
 from valorai.account.module import AccountModule
+from valorai.ai import AiConfig, AiReceiptExtractor, FinancialAdvisor, OpenAiCompatibleClient
 from valorai.clock import SystemClock
 from valorai.confirmation.module import ConfirmationModule
 from valorai.coordinator.hasher import BcryptHasher
@@ -55,6 +56,17 @@ def build_api(storage, env) -> RegistrationApi:
     accounts = SqlAccounts(db)
     audit = SqlAudit(db)
     lessons = SqlLessons(db)
+    ai_config = AiConfig(
+        mode=getattr(env, "AI_MODE", "demo") or "demo",
+        base_url=getattr(env, "AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
+        or "https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key=getattr(env, "AI_API_KEY", None),
+        model=getattr(env, "AI_MODEL", "gemini-3.5-flash-lite") or "gemini-3.5-flash-lite",
+        tier=getattr(env, "AI_TIER", "free_prototype") or "free_prototype",
+    )
+    ai_client = OpenAiCompatibleClient(ai_config, http_post=worker_http_post)
+    receipt_extractor = AiReceiptExtractor(ai_client, kv, clock)
+    advisor = FinancialAdvisor(ai_client, kv, clock)
     return RegistrationApi(
         AccountModule(accounts, kv, HASHER, clock, audit),
         SessionModule(SqlSessions(db), accounts, clock, _tokens),
@@ -67,7 +79,8 @@ def build_api(storage, env) -> RegistrationApi:
         getattr(env, "TURNSTILE_SITE_KEY", "") or "",
         getattr(env, "EMAIL_MODE", "demo"),
         log=lambda: print("authentication_request_failed"),
-        ledger=LedgerModule(SqlLedger(db), accounts, lessons, clock, audit),
+        ledger=LedgerModule(SqlLedger(db), accounts, lessons, clock, audit, receipt_extractor=receipt_extractor, advisor=advisor),
+        ai_config=ai_config,
     )
 
 
@@ -177,6 +190,14 @@ def _tokens() -> str:
 def _code_number() -> int:
     import secrets
     return secrets.randbelow(1_000_000)
+
+
+def worker_http_post(url: str, headers: dict[str, str], body: str, timeout_s: float) -> tuple[int, str]:
+    from pyodide.ffi import run_sync
+    from workers import fetch
+
+    response = run_sync(fetch(url, method="POST", body=body, headers=headers))
+    return int(response.status), str(run_sync(response.text()))
 
 
 def turnstile_verify(secret: str, token: str, remote_ip: str) -> dict:

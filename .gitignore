@@ -28,6 +28,7 @@ dist/
 .astro/
 .cloudflare/
 .dev.vars*
+!.dev.vars.example
 playwright-report/
 test-results/
 *.log

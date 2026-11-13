@@ -8,7 +8,14 @@ import DashboardWorkspace, { LightDismissModal, type AccountSummary, type Dashbo
 import { MarkdownContent } from './MarkdownContent';
 
 type Account = AccountSummary;
-type Config = { emailMode: string; siteKey: string; confirmation: { seconds: number; attempts: number; resendSeconds: number } };
+type Config = {
+  emailMode: string;
+  siteKey: string;
+  confirmation: { seconds: number; attempts: number; resendSeconds: number };
+  aiEnabled?: boolean;
+  aiTier?: 'free_prototype' | 'paid';
+  aiModel?: string;
+};
 type Lesson = DashboardLesson;
 type Values = { name: string; cpf: string; birthDate: string; phone: string; postalCode: string; state: string; city: string; email: string; password: string; confirmPassword: string; demoConsent: boolean };
 const initial: Values = { name: '', cpf: '', birthDate: '', phone: '', postalCode: '', state: '', city: '', email: '', password: '', confirmPassword: '', demoConsent: false };
@@ -303,6 +310,8 @@ export default function RegistrationApp() {
         noticeAlert={noticeAlert}
         setNotice={setNotice}
         setError={setError}
+        aiEnabled={config?.aiEnabled ?? false}
+        aiTier={config?.aiTier ?? 'free_prototype'}
       />
     ) : (
       <>

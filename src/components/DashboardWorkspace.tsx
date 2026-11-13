@@ -3,7 +3,7 @@ import NumberFlow from '@number-flow/react';
 import {
   Plus, PenLine, Camera, FileUp, ShoppingCart, Home, Car, BookOpen,
   Utensils, HeartPulse, Zap, ArrowDownLeft, PiggyBank, Tags, TrendingUp, Clock3,
-  BellRing, ArrowRight, Trash2, Lightbulb, Sparkles,
+  BellRing, ArrowRight, Trash2, Sparkles,
   Search, CircleAlert, X, Target,
   LayoutGrid, ReceiptText, ScanLine, ChevronDown, UserRound,
   SlidersHorizontal, Info, LogOut, UserX, Check
@@ -59,6 +59,16 @@ export type DashboardLesson = {
   progressPercent?: number;
 };
 
+export type AiSummaryData = {
+  headline: string;
+  summary: string;
+  recommendations: string[];
+  tone: 'ok' | 'warning' | 'alert';
+  states: string[];
+  source: 'ai' | 'fallback';
+  cached?: boolean;
+};
+
 export type DashboardData = {
   cycle: { label: string; code: string; today: string };
   summary: {
@@ -97,6 +107,8 @@ export type DashboardData = {
   categories: string[];
   categoryBreakdown: Array<{ category: string; spent: number }>;
   lessons: DashboardLesson[];
+  aiSummary?: AiSummaryData;
+  aiSummaryNeedsRefresh?: boolean;
 };
 
 export type ProfileData = {
@@ -448,6 +460,37 @@ export function Dropdown({
   );
 }
 
+async function compressReceiptImage(file: File): Promise<string> {
+  const maxDimension = 1280;
+  const maxChars = 480_000; // ~350 KB binary
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Não foi possível carregar a imagem selecionada.'));
+      el.src = objectUrl;
+    });
+    const scale = Math.min(1, maxDimension / Math.max(img.width || 1, img.height || 1));
+    const width = Math.max(1, Math.round(img.width * scale));
+    const height = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas indisponível neste navegador.');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    let dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+    if (dataUrl.length > maxChars) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.62);
+    }
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export default function DashboardWorkspace({
   account,
   dashboard,
@@ -468,6 +511,8 @@ export default function DashboardWorkspace({
   noticeAlert,
   setNotice,
   setError,
+  aiEnabled = false,
+  aiTier = 'free_prototype',
 }: {
   account: AccountSummary;
   dashboard: DashboardData | null;
@@ -488,6 +533,8 @@ export default function DashboardWorkspace({
   noticeAlert: ReactNode;
   setNotice: (msg: string) => void;
   setError: (msg: string) => void;
+  aiEnabled?: boolean;
+  aiTier?: 'free_prototype' | 'paid';
 }) {
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'fixed' | 'variable' | 'income'>('all');
   const [channelFilter, setChannelFilter] = useState<'all' | 'manual' | 'import' | 'photo'>('all');
@@ -527,8 +574,39 @@ export default function DashboardWorkspace({
     paymentMethod: 'pix' | 'credit' | 'debit' | 'cash' | 'boleto' | 'transfer';
     merchantDoc: string;
     confidence: number;
+    source?: 'ai' | 'fallback';
+    fallbackReason?: string;
   } | null>(null);
   const [receiptConfirmedCheck, setReceiptConfirmedCheck] = useState(true);
+
+  // Home AI Summary State
+  const [aiSummaryOverride, setAiSummaryOverride] = useState<AiSummaryData | null>(null);
+  const [aiSummaryBusy, setAiSummaryBusy] = useState(false);
+
+  const activeAiSummary = aiSummaryOverride ?? dashboard?.aiSummary ?? null;
+
+  useEffect(() => {
+    setAiSummaryOverride(null);
+  }, [dashboard?.aiSummary]);
+
+  useEffect(() => {
+    if (!aiEnabled || !dashboard?.aiSummaryNeedsRefresh || aiSummaryBusy) return;
+    let cancelled = false;
+    setAiSummaryBusy(true);
+    apiCall<{ aiSummary: AiSummaryData }>('ai/summary', { force: false })
+      .then((res) => {
+        if (!cancelled && res.aiSummary) setAiSummaryOverride(res.aiSummary);
+      })
+      .catch(() => {
+        // Keep deterministic fallback already rendered in dashboard.aiSummary
+      })
+      .finally(() => {
+        if (!cancelled) setAiSummaryBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [aiEnabled, dashboard?.aiSummaryNeedsRefresh]);
 
   // Import OFX / CSV / Excel State
   const [importFileName, setImportFileName] = useState('');
@@ -773,13 +851,26 @@ export default function DashboardWorkspace({
     }
   }
 
-  async function handleExtractReceipt(preset?: string, customFileName?: string, customHint?: string) {
+  async function handleRefreshAiSummary() {
+    setAiSummaryBusy(true);
+    try {
+      const res = await apiCall<{ aiSummary: AiSummaryData }>('ai/summary', { force: true });
+      if (res.aiSummary) setAiSummaryOverride(res.aiSummary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível atualizar a análise agora.');
+    } finally {
+      setAiSummaryBusy(false);
+    }
+  }
+
+  async function handleExtractReceipt(preset?: string, customFileName?: string, customHint?: string, customImageData?: string) {
     setModalError('');
     setActionBusy(true);
     try {
       const res = await apiCall<{ extracted: NonNullable<typeof extractedReceipt> }>('transactions/receipt', {
         fileName: customFileName ?? (receiptFileName || 'comprovante-nfce.jpg'),
         textHint: customHint ?? receiptHint,
+        imageData: customImageData,
         preset,
         confirm: false,
       });
@@ -1244,13 +1335,47 @@ export default function DashboardWorkspace({
 
                 <div className="ai-insight">
                   <div className="ai-insight-icon" aria-hidden="true">
-                    <Lightbulb size={17} />
+                    <Sparkles size={17} />
                   </div>
-                  <p>
-                    <strong>Previsão:</strong>{' '}
-                    {dashboard?.summary.insight.message ??
-                      `Seus gastos fixos comprometem ${fixedShare}% da renda mensal. Registre seus lançamentos para acompanhar o ritmo diário.`}
-                  </p>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                      <strong>
+                        {activeAiSummary?.headline ?? 'Previsão ValorAI'}
+                      </strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="tx-badge ia">
+                          {activeAiSummary?.source === 'ai' ? 'IA' : 'Resumo local'}
+                        </span>
+                        {aiEnabled && (
+                          <button
+                            type="button"
+                            className="button button-secondary button-small"
+                            onClick={handleRefreshAiSummary}
+                            disabled={aiSummaryBusy}
+                          >
+                            {aiSummaryBusy ? 'Atualizando…' : 'Atualizar'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p>
+                      {activeAiSummary?.summary ??
+                        dashboard?.summary.insight.message ??
+                        `Seus gastos fixos comprometem ${fixedShare}% da renda mensal. Registre seus lançamentos para acompanhar o ritmo diário.`}
+                    </p>
+                    {activeAiSummary && activeAiSummary.recommendations.length > 0 && (
+                      <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: '0.88rem' }}>
+                        {activeAiSummary.recommendations.map((rec, idx) => (
+                          <li key={idx}>{rec}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {aiEnabled && aiTier === 'free_prototype' && (
+                      <small className="field-hint" style={{ display: 'block', marginTop: 6 }}>
+                        Ambiente de protótipo (Free Tier): métricas resumidas sem dados pessoais.
+                      </small>
+                    )}
+                  </div>
                 </div>
               </section>
 
@@ -2062,12 +2187,17 @@ export default function DashboardWorkspace({
 
       {/* 2. Receipt AI / OCR Modal */}
       {activeModal === 'receipt' && (
-        <LightDismissModal title="Leitura de Comprovante por IA (OCR)" onClose={() => setActiveModal(null)}>
+        <LightDismissModal title="Leitura de Comprovante por IA" onClose={() => setActiveModal(null)}>
           <div className="modal-body">
             {modalError && <div className="alert alert-error" role="alert"><CircleAlert size={16} /><span>{modalError}</span></div>}
             <p>
-              Envie a foto ou PDF de um cupom fiscal ou recibo. O motor identifica o estabelecimento, CNPJ/NFC-e, valor e sugere a categoria para sua confirmação.
+              Envie a foto ou print de qualquer comprovante (cupom fiscal NFC-e/SAT, PIX, boleto, fatura de cartão ou maquininha). O motor identifica o valor pago, data e sugere a categoria para sua confirmação.
             </p>
+            {aiEnabled && aiTier === 'free_prototype' && (
+              <p className="field-hint">
+                Protótipo Free Tier: utilize comprovantes de teste ou sem dados bancários sensíveis reais.
+              </p>
+            )}
 
             <div className="upload-dropzone">
               <input
@@ -2076,18 +2206,26 @@ export default function DashboardWorkspace({
                 accept="image/*,.pdf"
                 capture="environment"
                 className="sr-only"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (file) {
-                    setReceiptFileName(file.name);
-                    handleExtractReceipt(undefined, file.name, receiptHint);
+                  if (!file) return;
+                  setReceiptFileName(file.name);
+                  if (file.type.startsWith('image/')) {
+                    try {
+                      const compressed = await compressReceiptImage(file);
+                      await handleExtractReceipt(undefined, file.name, receiptHint, compressed);
+                      return;
+                    } catch {
+                      // Fallback to filename/hint extraction if browser fails to decode image
+                    }
                   }
+                  await handleExtractReceipt(undefined, file.name, receiptHint);
                 }}
               />
               <label htmlFor="receiptFileInput" className="upload-dropzone-label">
                 <Camera size={24} aria-hidden="true" />
                 <strong>{receiptFileName || 'Selecionar foto do comprovante ou PDF'}</strong>
-                <small>JPG, PNG, WebP ou PDF • Captura direta da câmera no celular</small>
+                <small>JPG, PNG, WebP ou PDF • Redimensionamento automático para economizar dados</small>
               </label>
             </div>
 
@@ -2125,7 +2263,11 @@ export default function DashboardWorkspace({
               <form className="extracted-preview-box" onSubmit={handleConfirmReceipt}>
                 <div className="extracted-head">
                   <strong>Dados extraídos do comprovante</strong>
-                  <span className="tx-badge ia">Confiança IA: {extractedReceipt.confidence}%</span>
+                  <span className="tx-badge ia">
+                    {extractedReceipt.source === 'fallback'
+                      ? `Fallback • ${extractedReceipt.confidence}%`
+                      : `Confiança IA: ${extractedReceipt.confidence}%`}
+                  </span>
                 </div>
                 <div className="fields-grid">
                   <div className="field wide">

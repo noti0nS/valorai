@@ -29,7 +29,11 @@
   "vars": {
     "ENVIRONMENT": "development",
     "EMAIL_MODE": "demo",
-    "TURNSTILE_SITE_KEY": ""
+    "TURNSTILE_SITE_KEY": "",
+    "AI_MODE": "openai_compatible",
+    "AI_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "AI_MODEL": "gemini-3.5-flash-lite",
+    "AI_TIER": "free_prototype"
   },
   "env": {
     "production": {
@@ -37,7 +41,11 @@
       "vars": {
         "ENVIRONMENT": "production",
         "EMAIL_MODE": "demo",
-        "TURNSTILE_SITE_KEY": "0x4AAAAAAFrPCsARbdASrFUU"
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAFrPCsARbdASrFUU",
+        "AI_MODE": "openai_compatible",
+        "AI_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "AI_MODEL": "gemini-3.5-flash-lite",
+        "AI_TIER": "free_prototype"
       },
       "d1_databases": [
         {

@@ -1,5 +1,6 @@
 from urllib.parse import urlparse
 
+from valorai.ai.client import AiConfig
 from valorai.crypto import header, sha256_hex
 from valorai.errors import ApiError
 from valorai.finance.module import FinanceModule
@@ -55,7 +56,7 @@ def public_account(account, finance: FinanceModule) -> dict:
 
 
 class RegistrationApi:
-    def __init__(self, account, session, confirmation, finance, throttle, lessons, bot, clock, site_key: str, email_mode: str, log=None, ledger=None):
+    def __init__(self, account, session, confirmation, finance, throttle, lessons, bot, clock, site_key: str, email_mode: str, log=None, ledger=None, ai_config: AiConfig | None = None):
         self.account = account
         self.session = session
         self.confirmation = confirmation
@@ -68,6 +69,7 @@ class RegistrationApi:
         self.email_mode = email_mode
         self.log = log or (lambda: None)
         self.ledger = ledger or LedgerModule(MemoryLedger(), account.accounts, lessons, clock, account.audit)
+        self.ai_config = ai_config or AiConfig()
 
     def handle(self, method: str, url: str, headers: dict[str, str], body: bytes) -> Result:
         try:
@@ -86,7 +88,15 @@ class RegistrationApi:
         secure = parsed.scheme == "https"
         ip_hash = sha256_hex(header(headers, "cf-connecting-ip") or "local")
         if method == "GET" and path == "/api/config":
-            return _ok({"emailMode": "demo", "siteKey": self.site_key, "confirmation": self.confirmation.limits(), "prototype": True})
+            return _ok({
+                "emailMode": "demo",
+                "siteKey": self.site_key,
+                "confirmation": self.confirmation.limits(),
+                "prototype": True,
+                "aiEnabled": self.ai_config.enabled,
+                "aiTier": self.ai_config.tier,
+                "aiModel": self.ai_config.model,
+            })
         if method == "GET" and path == "/api/session":
             account, _hash = self.session.read(header(headers, "cookie"))
             return _ok({"account": public_account(account, self.finance)})
@@ -160,6 +170,8 @@ class RegistrationApi:
             if "extracted" in result:
                 return _ok(result)
             return _ok({"dashboard": result})
+        if path == "/api/ai/summary":
+            return _ok(self.ledger.handle_ai_summary(account, payload))
         if path == "/api/limits":
             return _ok({"dashboard": self.ledger.handle_limit(account, payload, ip_hash)})
         if path == "/api/goal":

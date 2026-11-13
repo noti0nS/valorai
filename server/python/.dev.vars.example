@@ -1,0 +1,14 @@
+# Copy this file to `server/python/.dev.vars` for local Wrangler development.
+# Never commit `server/python/.dev.vars` with real secrets.
+
+# Google AI Studio (Gemini) API key for the OpenAI-Compatible endpoint
+AI_API_KEY=your-google-ai-studio-api-key
+
+# Optional overrides (defaults are set in server/python/wrangler.jsonc)
+# AI_MODE=openai_compatible
+# AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+# AI_MODEL=gemini-3.5-flash-lite
+# AI_TIER=free_prototype
+
+# Optional: only required when ENVIRONMENT is not "development"
+# TURNSTILE_SECRET_KEY=
