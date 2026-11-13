@@ -2,7 +2,7 @@ import csv
 import io
 import re
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from valorai.ai.advisor import FinancialAdvisor, build_deterministic_summary, compute_deterministic_context
 from valorai.ai.receipt import AiReceiptExtractor
@@ -508,6 +508,8 @@ class LedgerModule:
         category = str(payload.get("category") or "").strip()
         if scope == "daily" and not category:
             category = "Teto Diário"
+        elif scope == "weekly" and not category:
+            category = "Teto Semanal"
         elif scope == "card_share" and not category:
             category = "Supérfluos no Cartão"
         if scope == "category":
@@ -1013,8 +1015,13 @@ class LedgerModule:
     def _evaluate_limits(self, transactions: list[Transaction], limits: list[BudgetLimit], effective_income_cents: int, today_iso: str) -> tuple[list[dict], list[dict]]:
         by_category: dict[str, int] = {}
         today_variable_cents = 0
+        weekly_expense_cents = 0
         credit_variable_cents = 0
         credit_total_cents = 0
+
+        today_date = datetime.strptime(today_iso, "%Y-%m-%d").date()
+        week_start = (today_date - timedelta(days=today_date.weekday())).isoformat()
+        week_end = (today_date + timedelta(days=6 - today_date.weekday())).isoformat()
 
         for tx in transactions:
             if tx.kind == "income":
@@ -1022,6 +1029,8 @@ class LedgerModule:
             by_category[tx.category] = by_category.get(tx.category, 0) + tx.amount_cents
             if tx.kind == "variable_expense" and tx.occurred_on == today_iso:
                 today_variable_cents += tx.amount_cents
+            if week_start <= tx.occurred_on <= week_end:
+                weekly_expense_cents += tx.amount_cents
             if tx.payment_method == "credit":
                 credit_total_cents += tx.amount_cents
                 if tx.kind == "variable_expense":
@@ -1033,6 +1042,10 @@ class LedgerModule:
         for lim in limits:
             if lim.scope == "daily":
                 spent_cents = today_variable_cents
+                percent = round(spent_cents / lim.limit_cents * 100) if lim.limit_cents > 0 else 0
+                lesson_id = "first-budget"
+            elif lim.scope == "weekly":
+                spent_cents = weekly_expense_cents
                 percent = round(spent_cents / lim.limit_cents * 100) if lim.limit_cents > 0 else 0
                 lesson_id = "first-budget"
             elif lim.scope == "card_share":

@@ -32,6 +32,7 @@ from valorai.coordinator.hasher import BcryptHasher
 from valorai.finance.module import FinanceModule
 from valorai.http import RegistrationApi, admit
 from valorai.ledger.module import LedgerModule
+from valorai.mailer import ResendMailer
 from valorai.runtime import api_context
 from valorai.session.module import SessionModule
 from valorai.storage import DjangoDb, SqlAccounts, SqlAudit, SqlLedger, SqlLessons, SqlSessions
@@ -67,6 +68,9 @@ def build_api(storage, env) -> RegistrationApi:
     ai_client = OpenAiCompatibleClient(ai_config, http_post=worker_http_post)
     receipt_extractor = AiReceiptExtractor(ai_client, kv, clock)
     advisor = FinancialAdvisor(ai_client, kv, clock)
+    email_mode = getattr(env, "EMAIL_MODE", "demo") or "demo"
+    email_from = getattr(env, "EMAIL_FROM", "ValorAI <noreply@mail.noti0ns.dev>") or "ValorAI <noreply@mail.noti0ns.dev>"
+    mailer = ResendMailer(getattr(env, "RESEND_API_KEY", None), email_from, http_post=worker_http_post) if email_mode == "resend" else None
     return RegistrationApi(
         AccountModule(accounts, kv, HASHER, clock, audit),
         SessionModule(SqlSessions(db), accounts, clock, _tokens),
@@ -77,10 +81,11 @@ def build_api(storage, env) -> RegistrationApi:
         bot,
         clock,
         getattr(env, "TURNSTILE_SITE_KEY", "") or "",
-        getattr(env, "EMAIL_MODE", "demo"),
+        email_mode,
         log=lambda: print("authentication_request_failed"),
         ledger=LedgerModule(SqlLedger(db), accounts, lessons, clock, audit, receipt_extractor=receipt_extractor, advisor=advisor),
         ai_config=ai_config,
+        mailer=mailer,
     )
 
 

@@ -99,6 +99,9 @@ class MemoryAccounts:
     def deactivate(self, account_id: str) -> None:
         self.rows[account_id] = replace(self.rows[account_id], status="inactive")
 
+    def update_password(self, account_id: str, password_hash: str) -> None:
+        self.rows[account_id] = replace(self.rows[account_id], password_hash=password_hash)
+
 
 class MemorySessions:
     def __init__(self):
@@ -369,6 +372,9 @@ class SqlAccounts:
 
     def deactivate(self, account_id: str) -> None:
         self.db.execute("UPDATE accounts SET status = 'inactive' WHERE id = ?", (account_id,))
+
+    def update_password(self, account_id: str, password_hash: str) -> None:
+        self.db.execute("UPDATE accounts SET password_hash = ? WHERE id = ?", (password_hash, account_id))
 
 
 class SqlSessions:

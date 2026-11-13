@@ -101,7 +101,7 @@ function ProductPreview() {
 }
 export default function RegistrationApp() {
   const [step, setStep] = useState(0);
-  const [view, setView] = useState<'register' | 'login' | 'dashboard' | 'deactivated'>('login');
+  const [view, setView] = useState<'register' | 'login' | 'recovery' | 'dashboard' | 'deactivated'>('login');
   const [dashTab, setDashTab] = useState<'overview' | 'transactions' | 'planning' | 'guides'>('overview');
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -119,14 +119,24 @@ export default function RegistrationApp() {
   const [code, setCode] = useState('');
   const [resendAt, setResendAt] = useState(0);
   const [time, setTime] = useState(Date.now() / 1000);
-  const [modal, setModal] = useState<'about' | 'inbox' | 'deactivate' | null>(null);
-  const [inbox, setInbox] = useState<{ code: string; to: string; expiresAt: number } | null>(null);
+  const [modal, setModal] = useState<'about' | 'inbox' | 'deactivate' | 'password' | null>(null);
+  const [inbox, setInbox] = useState<{ code: string; to: string; expiresAt: number; subject?: string } | null>(null);
   const [inboxError, setInboxError] = useState('');
   const [income, setIncome] = useState('');
   const [expenses, setExpenses] = useState('');
   const [goal, setGoal] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [recoveryStep, setRecoveryStep] = useState<0 | 1>(0);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [recoveryConfirm, setRecoveryConfirm] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const [passwordError, setPasswordError] = useState('');
   const [deactivatePassword, setDeactivatePassword] = useState('');
   const [deactivateError, setDeactivateError] = useState('');
   const [postalStatus, setPostalStatus] = useState('');
@@ -255,6 +265,60 @@ export default function RegistrationApp() {
     try { const data = await api<{ resendAt: number }>('resend', {}); setResendAt(data.resendAt); setCode(''); setInbox(null); setNotice('Um novo código está na sua caixa de demonstração.'); }
     catch (e) { showError(e); } finally { setBusy(false); }
   }
+  async function requestRecovery(e?: SyntheticEvent) {
+    e?.preventDefault();
+    setBusy(true); setError(''); setErrors({}); setNotice('');
+    try {
+      const res = await api<{ message: string; resendSeconds: number }>('recovery/request', { email: recoveryEmail, turnstileToken: token });
+      setRecoveryStep(1);
+      setResendAt(Date.now() / 1000 + (res.resendSeconds || 60));
+      setNotice(res.message);
+    } catch (err) {
+      showError(err); setBotReset(v => v + 1);
+    } finally { setBusy(false); }
+  }
+  async function openRecoveryInbox() {
+    setModal('inbox'); setInbox(null); setInboxError('');
+    try {
+      const data = await api<{ code: string; to: string; expiresAt: number }>('recovery/demo-inbox', { email: recoveryEmail });
+      setInbox({ ...data, subject: 'Seu código de recuperação de senha' });
+    } catch (e) {
+      setInboxError(e instanceof Error ? e.message : 'Tente novamente.');
+    }
+  }
+  async function resetRecoveryPassword(e: SyntheticEvent) {
+    e.preventDefault();
+    setBusy(true); setError(''); setErrors({}); setNotice('');
+    try {
+      await api('recovery/reset', {
+        email: recoveryEmail,
+        code: recoveryCode,
+        newPassword: recoveryPassword,
+        confirmPassword: recoveryConfirm,
+      });
+      setRecoveryCode(''); setRecoveryPassword(''); setRecoveryConfirm(''); setRecoveryStep(0);
+      setInbox(null); setView('login');
+      setNotice('Senha redefinida com sucesso. Entre com sua nova senha.');
+    } catch (err) {
+      showError(err);
+    } finally { setBusy(false); }
+  }
+  async function changePassword(e: SyntheticEvent) {
+    e.preventDefault();
+    setBusy(true); setPasswordError(''); setPasswordErrors({});
+    try {
+      await api('password', { currentPassword, newPassword, confirmPassword: confirmNewPassword });
+      setModal(null); setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword('');
+      setNotice('Senha alterada com sucesso. Outras sessões foram encerradas.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setPasswordError(err.message);
+        setPasswordErrors(err.fields || {});
+      } else {
+        setPasswordError('Não foi possível alterar a senha.');
+      }
+    } finally { setBusy(false); }
+  }
   async function markLessonRead(item: Lesson) {
     try {
       const res = await api<{ dashboard: DashboardData }>('lessons/progress', { lessonId: item.id, progressPercent: 100 });
@@ -278,7 +342,16 @@ export default function RegistrationApp() {
     'Valores aproximados bastam. Eles são seu ponto de partida e podem ser ajustados depois.',
   ];
   const goalIcons = [Wallet, CreditCard, PiggyBank, TrendingUp];
-  const switchView = (next: 'login' | 'register') => { setView(next); setStep(0); setError(''); setNotice(''); };
+  const switchView = (next: 'login' | 'register' | 'recovery') => {
+    setView(next); setStep(0); setError(''); setErrors({}); setNotice('');
+    if (next === 'recovery') {
+      setRecoveryStep(0);
+      setRecoveryCode('');
+      setRecoveryPassword('');
+      setRecoveryConfirm('');
+      if (identifier.includes('@') && !recoveryEmail) setRecoveryEmail(identifier);
+    }
+  };
   const errorAlert = error && <div className="alert alert-error" role="alert"><CircleAlert size={18} /><span>{error}</span><button type="button" aria-label="Fechar aviso" onClick={() => setError('')}><X size={16} /></button></div>;
   const noticeAlert = notice && <div className="alert alert-success" role="status"><CheckCircle2 size={18} /><span>{notice}</span></div>;
   const isDashboard = view === 'dashboard' && !!account;
@@ -293,6 +366,7 @@ export default function RegistrationApp() {
         activeTab={dashTab}
         onSelectTab={setDashTab}
         onEditFinanceProfile={() => { setStep(3); setView('register'); }}
+        onOpenChangePassword={() => { setPasswordError(''); setPasswordErrors({}); setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword(''); setModal('password'); }}
         onOpenDeactivate={() => { setDeactivateError(''); setModal('deactivate'); }}
         onOpenAbout={() => setModal('about')}
         onLogout={logout}
@@ -356,7 +430,9 @@ export default function RegistrationApp() {
                   <div className="otp-field"><Field label={`Código enviado para ${account?.email ?? 'seu e-mail'}`} id="code" error={errors.code}><input id="code" className="otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="······" value={code} onChange={e => { setCode(digits(e.target.value).slice(0, 6)); setErrors({}); }} aria-invalid={!!errors.code} aria-describedby="code-help" /></Field></div>
                   <div className="verify-meta"><span><Clock3 size={15} />Expira em 10 minutos</span>
                     <button type="button" className="link-button" onClick={resend} disabled={seconds > 0 || busy}><RotateCcw size={14} />{seconds ? `Reenviar em ${seconds}s` : 'Reenviar código'}</button></div>
-                  <button className="inbox-button" type="button" onClick={openInbox} aria-label="Abrir caixa de demonstração"><Mail size={20} /><span><strong>Abrir caixa de demonstração</strong><small>Mostra a mensagem simulada com o código</small></span><ArrowRight size={18} /></button>
+                  {config?.emailMode === 'demo'
+                    ? <button className="inbox-button" type="button" onClick={openInbox} aria-label="Abrir caixa de demonstração"><Mail size={20} /><span><strong>Abrir caixa de demonstração</strong><small>Mostra a mensagem simulada com o código</small></span><ArrowRight size={18} /></button>
+                    : <div className="note"><Mail size={16} /><span>Enviamos um código de 6 dígitos para <strong>{account?.email || values.email}</strong>.</span></div>}
                 </div>}
                 {step === 3 && <>
                   <div className="fields-grid">
@@ -376,20 +452,40 @@ export default function RegistrationApp() {
             </>}
             {view === 'login' && <>
               <div className="page-heading"><h1 ref={heading} tabIndex={-1}>Entrar no ValorAI</h1><p>Acesse sua conta de demonstração com CPF ou e-mail.</p></div>
-              {errorAlert}
+              {noticeAlert}{errorAlert}
               <form onSubmit={login}><div className="fields-grid">
                 <Field label="CPF ou e-mail" id="identifier" wide><input id="identifier" autoComplete="username" required disabled={busy || loadingSession} value={identifier} onChange={e => setIdentifier(e.target.value)} /></Field>
                 <Field label="Senha" id="loginPassword" wide><div className="password-wrap"><input id="loginPassword" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required disabled={busy || loadingSession} maxLength={32} value={loginPassword} onChange={e => setLoginPassword(e.target.value)} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field></div>
                 {config?.siteKey && <div className="login-bot"><BotCheck siteKey={config.siteKey} onToken={setToken} reset={botReset} /></div>}
                 <div className="form-actions"><button className="button button-primary" disabled={busy || loadingSession || !config || (!!config.siteKey && !token)}>{busy || loadingSession ? <><LoaderCircle className="spin" size={18} />{loadingSession ? 'Carregando…' : 'Entrando…'}</> : <>Entrar na minha conta<ArrowRight size={18} /></>}</button></div>
               </form>
-              <p className="form-switch">Primeira vez aqui? <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('register')}>Criar minha conta</button></p>
-              <div className="note"><Info size={16} /><span>A recuperação de senha ainda não faz parte deste protótipo.</span></div>
+              <p className="form-switch">Primeira vez aqui? <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('register')}>Criar minha conta</button> · <button type="button" className="link-button" disabled={busy || loadingSession} onClick={() => switchView('recovery')}>Esqueci minha senha</button></p>
+            </>}
+            {view === 'recovery' && <>
+              <div className="page-heading"><h1 ref={heading} tabIndex={-1}>Recuperar senha</h1><p>{recoveryStep === 0 ? 'Informe seu e-mail cadastrado para gerar um código de recuperação.' : 'Digite o código de 6 dígitos (validade de 15 min) e escolha sua nova senha.'}</p></div>
+              {noticeAlert}{errorAlert}
+              {recoveryStep === 0 ? (
+                <form onSubmit={requestRecovery}><div className="fields-grid">
+                  <Field label="E-mail cadastrado" id="recoveryEmail" error={errors.email} wide><input id="recoveryEmail" type="email" autoComplete="email" required disabled={busy} maxLength={200} value={recoveryEmail} onChange={e => setRecoveryEmail(e.target.value)} /></Field></div>
+                  {config?.siteKey && <div className="login-bot"><BotCheck siteKey={config.siteKey} onToken={setToken} reset={botReset} /></div>}
+                  <div className="form-actions"><button type="button" className="button button-ghost" disabled={busy} onClick={() => switchView('login')}><ArrowLeft size={18} />Voltar</button><button className="button button-primary" disabled={busy || !config || (!!config.siteKey && !token)}>{busy ? <><LoaderCircle className="spin" size={18} />Enviando…</> : <>Solicitar código<ArrowRight size={18} /></>}</button></div>
+                </form>
+              ) : (
+                <form onSubmit={resetRecoveryPassword}><div className="fields-grid">
+                  {config?.emailMode === 'demo' && <div className="field wide"><button type="button" className="button button-secondary button-block" onClick={openRecoveryInbox}><Mail size={18} />Abrir caixa de demonstração</button></div>}
+                  <Field label="Código de 6 dígitos" id="recoveryCode" error={errors.code} wide><input id="recoveryCode" className="code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" required disabled={busy} value={recoveryCode} onChange={e => setRecoveryCode(digits(e.target.value).slice(0, 6))} /></Field>
+                  <Field label="Nova senha" id="recoveryPassword" error={errors.newPassword} wide><div className="password-wrap"><input id="recoveryPassword" type={showPassword ? 'text' : 'password'} autoComplete="new-password" required disabled={busy} maxLength={32} value={recoveryPassword} onChange={e => setRecoveryPassword(e.target.value)} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field>
+                  <Field label="Confirme a nova senha" id="recoveryConfirm" error={errors.confirmPassword} wide><input id="recoveryConfirm" type={showPassword ? 'text' : 'password'} autoComplete="new-password" required disabled={busy} maxLength={32} value={recoveryConfirm} onChange={e => setRecoveryConfirm(e.target.value)} /></Field></div>
+                  <div className="inline-actions"><button type="button" className="link-button" onClick={() => requestRecovery()} disabled={seconds > 0 || busy}><RotateCcw size={14} />{seconds ? `Reenviar em ${seconds}s` : 'Reenviar código'}</button></div>
+                  <div className="form-actions"><button type="button" className="button button-ghost" disabled={busy} onClick={() => setRecoveryStep(0)}><ArrowLeft size={18} />Voltar</button><button className="button button-primary" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={18} />Redefinindo…</> : <>Redefinir senha<ArrowRight size={18} /></>}</button></div>
+                </form>
+              )}
+              <p className="form-switch"><button type="button" className="link-button" disabled={busy} onClick={() => switchView('login')}>Voltar para o login</button></p>
             </>}
             {view === 'deactivated' && <><div className="page-heading"><h1 ref={heading} tabIndex={-1}>Conta desativada</h1><p>Suas sessões foram encerradas. O cadastro e o perfil financeiro foram preservados (exclusão lógica).</p><p>Reativação e exclusão definitiva ainda não estão disponíveis.</p></div>
               <button className="button button-primary button-block" onClick={() => { setView('login'); setStep(0); setValues(initial); }}>Voltar ao início<ArrowRight size={18} /></button></>}
           </motion.div></AnimatePresence>
-          {(view === 'login' || view === 'register') && <ProductPreview />}
+          {(view === 'login' || view === 'register' || view === 'recovery') && <ProductPreview />}
           <div className="sr-only" aria-live="polite">{view === 'register' ? `Etapa ${step + 1} de 4: ${stepNames[step]}` : ''}</div>
         </main>
         <footer className="site-footer"><div><span>Uma iniciativa</span><CompanyMark /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
@@ -402,9 +498,17 @@ export default function RegistrationApp() {
       <p>Os alertas de limites avisam você ao atingir ou superar o teto configurado sem bloquear nenhum lançamento. O protótipo não declara conformidade com a LGPD.</p>
       <button className="button button-primary button-block" onClick={() => setModal(null)}>Entendi</button></div></Modal>}
     {modal === 'inbox' && <Modal title="Caixa de demonstração" onClose={() => setModal(null)}><div className="modal-body">{inboxError ? <p role="alert">{inboxError}</p> : inbox ? <>
-      <dl className="mail-meta"><dt>De</dt><dd>ValorAI (simulado)</dd><dt>Para</dt><dd>{inbox.to}</dd><dt>Assunto</dt><dd>Seu código de confirmação</dd></dl>
-      <p>Use este código para confirmar seu cadastro:</p><div className="inbox-code">{inbox.code}</div><p className="field-hint">Uso único. Nenhum e-mail foi enviado.</p>
-      <button className="button button-primary button-block" onClick={() => { setCode(inbox.code); setModal(null); }}>Usar este código<ArrowRight size={18} /></button></> : <p role="status">Abrindo mensagem…</p>}</div></Modal>}
+      <dl className="mail-meta"><dt>De</dt><dd>ValorAI (simulado)</dd><dt>Para</dt><dd>{inbox.to}</dd><dt>Assunto</dt><dd>{inbox.subject || 'Seu código de confirmação'}</dd></dl>
+      <p>Use este código para continuar:</p><div className="inbox-code">{inbox.code}</div><p className="field-hint">Uso único. Nenhum e-mail foi enviado.</p>
+      <button className="button button-primary button-block" onClick={() => { if (view === 'recovery') setRecoveryCode(inbox.code); else setCode(inbox.code); setModal(null); }}>Usar este código<ArrowRight size={18} /></button></> : <p role="status">Abrindo mensagem…</p>}</div></Modal>}
+    {modal === 'password' && <Modal title="Alterar senha" onClose={() => setModal(null)}><form className="modal-body" onSubmit={changePassword}>
+      {passwordError && <div className="alert alert-error" role="alert"><CircleAlert size={18} /><span>{passwordError}</span></div>}
+      <p>Ao alterar sua senha, todas as outras sessões ativas serão encerradas.</p>
+      <Field id="currentPassword" label="Senha atual" error={passwordErrors.currentPassword}><input id="currentPassword" type="password" autoComplete="current-password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required maxLength={32} /></Field>
+      <Field id="newPassword" label="Nova senha" error={passwordErrors.newPassword} hint="8 a 32 caracteres, 1 letra maiúscula e 1 número."><input id="newPassword" type="password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required maxLength={32} /></Field>
+      <Field id="confirmNewPassword" label="Confirme a nova senha" error={passwordErrors.confirmPassword}><input id="confirmNewPassword" type="password" autoComplete="new-password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} required maxLength={32} /></Field>
+      <button className="button button-primary button-block" disabled={busy}>{busy ? 'Salvando…' : 'Salvar nova senha'}</button>
+    </form></Modal>}
     {modal === 'deactivate' && <Modal title="Desativar sua conta?" onClose={() => { setModal(null); setDeactivatePassword(''); }}><form className="modal-body" onSubmit={async e => { e.preventDefault(); setBusy(true); setDeactivateError(''); try { await api('deactivate', { password: deactivatePassword }); setModal(null); setAccount(null); setDashboard(null); setProfile(null); setView('deactivated'); setDeactivatePassword(''); } catch (e) { setDeactivateError(e instanceof Error ? e.message : 'Tente novamente.'); } finally { setBusy(false); } }}><p>O acesso será encerrado em todos os dispositivos. Seu cadastro e suas estimativas serão preservados; nada é apagado.</p><Field id="deactivatePassword" label="Confirme sua senha" error={deactivateError}><input id="deactivatePassword" type="password" autoComplete="current-password" value={deactivatePassword} onChange={e => setDeactivatePassword(e.target.value)} required maxLength={32} /></Field><button className="button button-danger button-block" disabled={busy}>{busy ? 'Desativando…' : 'Confirmar desativação'}</button></form></Modal>}
     {lesson && <Modal title={lesson.title} onClose={() => setLesson(null)} wide><div className="modal-body lesson-body">
       <div className="lesson-modal-meta">{lesson.category && <span className="guide-category-tag">{lesson.category}</span>}<span className="tag"><Clock3 size={13} />{lesson.minutes} min de leitura</span>{lesson.progressPercent === 100 && <span className="pill-badge pill-success"><Check size={12} />Leitura concluída</span>}</div>

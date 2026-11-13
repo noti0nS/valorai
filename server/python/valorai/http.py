@@ -56,7 +56,7 @@ def public_account(account, finance: FinanceModule) -> dict:
 
 
 class RegistrationApi:
-    def __init__(self, account, session, confirmation, finance, throttle, lessons, bot, clock, site_key: str, email_mode: str, log=None, ledger=None, ai_config: AiConfig | None = None):
+    def __init__(self, account, session, confirmation, finance, throttle, lessons, bot, clock, site_key: str, email_mode: str, log=None, ledger=None, ai_config: AiConfig | None = None, mailer=None):
         self.account = account
         self.session = session
         self.confirmation = confirmation
@@ -70,6 +70,7 @@ class RegistrationApi:
         self.log = log or (lambda: None)
         self.ledger = ledger or LedgerModule(MemoryLedger(), account.accounts, lessons, clock, account.audit)
         self.ai_config = ai_config or AiConfig()
+        self.mailer = mailer
 
     def handle(self, method: str, url: str, headers: dict[str, str], body: bytes) -> Result:
         try:
@@ -89,7 +90,7 @@ class RegistrationApi:
         ip_hash = sha256_hex(header(headers, "cf-connecting-ip") or "local")
         if method == "GET" and path == "/api/config":
             return _ok({
-                "emailMode": "demo",
+                "emailMode": self.email_mode,
                 "siteKey": self.site_key,
                 "confirmation": self.confirmation.limits(),
                 "prototype": True,
@@ -127,12 +128,46 @@ class RegistrationApi:
             self.bot.check(payload, parsed.hostname, header(headers, "cf-connecting-ip") or "")
             created = self.account.create(data, ip_hash)
             timing = self.confirmation.issue(created.id)
+            if self.email_mode == "resend" and self.mailer is not None:
+                self.mailer.send_code(created.email, self.confirmation.code_for(created.id), "confirmation")
             cookie = self.session.start(created.id, secure=secure)
             return _ok({"account": public_account(created, self.finance), **timing}, 201, cookie)
         if path == "/api/login":
             self.bot.check(payload, parsed.hostname, header(headers, "cf-connecting-ip") or "")
             account = self.account.authenticate(payload.get("identifier"), payload.get("password"), ip_hash)
             return _ok({"account": public_account(account, self.finance)}, 200, self.session.start(account.id, secure=secure))
+        if path == "/api/recovery/request":
+            raw_email = payload.get("email")
+            if not isinstance(raw_email, str) or "@" not in raw_email.strip():
+                raise ApiError(422, "Confira os campos destacados.", {"email": "Informe um e-mail válido."})
+            self.bot.check(payload, parsed.hostname, header(headers, "cf-connecting-ip") or "")
+            account = self.account.find_active_by_email(raw_email)
+            if account is not None and self.confirmation.issue_recovery(account.id):
+                if self.email_mode == "resend" and self.mailer is not None:
+                    self.mailer.send_code(account.email, self.confirmation.recovery_code_for(account.id), "recovery")
+            return _ok({
+                "ok": True,
+                "message": "Se existir uma conta ativa com esse e-mail, enviaremos um código de 6 dígitos.",
+                "resendSeconds": 60,
+            })
+        if path == "/api/recovery/demo-inbox":
+            if self.email_mode != "demo":
+                raise ApiError(404, "Indisponível.")
+            account = self.account.find_active_by_email(payload.get("email"))
+            if account is None:
+                raise ApiError(404, "Nenhum código de recuperação ativo para este e-mail.")
+            return _ok(self.confirmation.reveal_recovery(account))
+        if path == "/api/recovery/reset":
+            self.account.recover_password(
+                payload.get("email"),
+                payload.get("code"),
+                payload.get("newPassword"),
+                payload.get("confirmPassword"),
+                self.confirmation,
+                self.session,
+                ip_hash,
+            )
+            return _ok({"ok": True})
         account, token_hash = self.session.read(header(headers, "cookie"))
         if path == "/api/logout":
             self.session.clear(token_hash)
@@ -140,7 +175,10 @@ class RegistrationApi:
         if path == "/api/resend":
             if account.status != "pending":
                 raise ApiError(409, "Essa etapa já foi concluída.")
-            return _ok(self.confirmation.issue(account.id))
+            timing = self.confirmation.issue(account.id)
+            if self.email_mode == "resend" and self.mailer is not None:
+                self.mailer.send_code(account.email, self.confirmation.code_for(account.id), "confirmation")
+            return _ok(timing)
         if path == "/api/confirm":
             self.confirmation.check(account, payload.get("code"))
             confirmed = self.account.mark_demo_confirmed(account, ip_hash)
@@ -179,6 +217,16 @@ class RegistrationApi:
             return _ok({"account": public_account(updated, self.finance), "dashboard": dashboard})
         if path == "/api/lessons/progress":
             return _ok({"dashboard": self.ledger.handle_lesson_progress(account, payload, ip_hash)})
+        if path == "/api/password":
+            self.account.change_password(
+                account,
+                payload.get("currentPassword"),
+                payload.get("newPassword"),
+                payload.get("confirmPassword"),
+                self.session,
+                ip_hash,
+            )
+            return _ok({"ok": True}, 200, self.session.start(account.id, secure=secure))
         if path == "/api/deactivate":
             self.account.deactivate(account, payload.get("password"), self.session, self.confirmation, ip_hash)
             return _ok({"ok": True}, 200, self.session.cookie_header(secure))

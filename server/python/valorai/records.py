@@ -44,6 +44,7 @@ class PaymentMethod(StrEnum):
 class LimitScope(StrEnum):
     CATEGORY = "category"
     DAILY = "daily"
+    WEEKLY = "weekly"
     CARD_SHARE = "card_share"
 
 

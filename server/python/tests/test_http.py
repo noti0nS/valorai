@@ -67,3 +67,95 @@ def test_confirmation_storage_prefix_is_private():
     ]
     assert offenders == []
     assert "bcrypt" not in (root / "account" / "module.py").read_text(encoding="utf-8")
+
+
+def test_rf008_password_recovery_demo_flow_and_session_revocation(world):
+    from test_account import registration
+    api = world["api"]
+    created = post(api, "/api/register", registration())
+    owner = cookie_of(created)
+    inbox = api.handle("GET", "http://127.0.0.1:8787/api/demo-inbox", {"cookie": owner}, b"")
+    confirmed = post(api, "/api/confirm", {"code": inbox.body["code"]}, owner)
+    session1 = cookie_of(confirmed)
+
+    # Uniform response for unknown and known emails
+    unknown = post(api, "/api/recovery/request", {"email": "naoexiste@example.com"})
+    known = post(api, "/api/recovery/request", {"email": "fixture@example.com"})
+    assert unknown.status == 200 and known.status == 200
+    assert unknown.body["message"] == known.body["message"]
+
+    # Demo inbox reveals recovery code for known email only
+    assert post(api, "/api/recovery/demo-inbox", {"email": "naoexiste@example.com"}).status == 404
+    rec_inbox = post(api, "/api/recovery/demo-inbox", {"email": "fixture@example.com"})
+    assert rec_inbox.status == 200
+    code = rec_inbox.body["code"]
+    assert len(code) == 6
+
+    # Wrong code is rejected; correct code resets password and revokes active sessions
+    assert post(api, "/api/recovery/reset", {
+        "email": "fixture@example.com", "code": "000000", "newPassword": "NewPassword9", "confirmPassword": "NewPassword9",
+    }).status == 400
+    reset = post(api, "/api/recovery/reset", {
+        "email": "fixture@example.com", "code": code, "newPassword": "NewPassword9", "confirmPassword": "NewPassword9",
+    })
+    assert reset.status == 200
+    assert api.handle("GET", "http://127.0.0.1:8787/api/session", {"cookie": session1}, b"").status == 401
+    assert post(api, "/api/login", {"identifier": "fixture@example.com", "password": "TestingOnly8"}).status == 401
+    assert post(api, "/api/login", {"identifier": "fixture@example.com", "password": "NewPassword9"}).status == 200
+
+
+def test_rf009_authenticated_password_change_revokes_other_sessions(world, monkeypatch):
+    from test_account import registration
+    api = world["api"]
+    tokens = iter([f"{i:064x}" for i in range(1, 10)])
+    monkeypatch.setattr(api.session, "tokens", lambda: next(tokens))
+    created = post(api, "/api/register", registration())
+    owner = cookie_of(created)
+    inbox = api.handle("GET", "http://127.0.0.1:8787/api/demo-inbox", {"cookie": owner}, b"")
+    confirmed = post(api, "/api/confirm", {"code": inbox.body["code"]}, owner)
+    session_a = cookie_of(confirmed)
+    login_b = post(api, "/api/login", {"identifier": "fixture@example.com", "password": "TestingOnly8"})
+    session_b = cookie_of(login_b)
+
+    wrong = post(api, "/api/password", {
+        "currentPassword": "WrongPassword1", "newPassword": "UpdatedPass9", "confirmPassword": "UpdatedPass9",
+    }, session_a)
+    assert wrong.status == 422
+
+    changed = post(api, "/api/password", {
+        "currentPassword": "TestingOnly8", "newPassword": "UpdatedPass9", "confirmPassword": "UpdatedPass9",
+    }, session_a)
+    assert changed.status == 200
+    new_session_a = cookie_of(changed)
+    assert api.handle("GET", "http://127.0.0.1:8787/api/session", {"cookie": session_b}, b"").status == 401
+    assert api.handle("GET", "http://127.0.0.1:8787/api/session", {"cookie": new_session_a}, b"").status == 200
+
+
+def test_resend_mailer_sends_confirmation_and_recovery_codes(world):
+    from test_account import registration
+    from valorai.mailer import ResendMailer
+
+    sent = []
+
+    def fake_post(url, headers, body, timeout_s):
+        sent.append((url, headers, json.loads(body)))
+        return 200, '{"id":"email_123"}'
+
+    api = world["api"]
+    api.email_mode = "resend"
+    api.mailer = ResendMailer("re_test_key", "ValorAI <noreply@mail.noti0ns.dev>", http_post=fake_post)
+
+    created = post(api, "/api/register", registration())
+    assert created.status == 201
+    assert len(sent) == 1
+    assert sent[0][0] == "https://api.resend.com/emails"
+    assert sent[0][2]["to"] == ["fixture@example.com"]
+    assert "confirmação" in sent[0][2]["subject"].lower()
+    # Demo inbox must be disabled when email_mode == 'resend'
+    assert api.handle("GET", "http://127.0.0.1:8787/api/demo-inbox", {"cookie": cookie_of(created)}, b"").status == 404
+
+    req = post(api, "/api/recovery/request", {"email": "fixture@example.com"})
+    assert req.status == 200
+    assert len(sent) == 2
+    assert "recuperação" in sent[1][2]["subject"].lower()
+    assert post(api, "/api/recovery/demo-inbox", {"email": "fixture@example.com"}).status == 404

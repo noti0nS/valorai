@@ -10,6 +10,7 @@ This document describes the architecture of the **ValorAI** platform (by Nulfina
 > - [ADR 0005: Generic Audit Triggers Rendered From One Template](docs/adr/0005-generic-audit-triggers.md)
 > - [ADR 0006: Conformance Fixes for Requirements Revision 1.4](docs/adr/0006-requirements-1-4-conformance.md)
 > - [ADR 0007: OpenAI-Compatible AI Integration for Receipt Extraction and Condensed Financial Summaries](docs/adr/0007-openai-compatible-ai-integration.md)
+> - [ADR 0008: Password Recovery, Authenticated Password Change, Weekly Budget Limits, and Resend Email Delivery](docs/adr/0008-password-recovery-weekly-limits-and-resend-email.md)
 
 ---
 
@@ -89,30 +90,30 @@ flowchart LR
 
 | Module / Package | Path | Responsibilities & Requirements Coverage |
 | :--- | :--- | :--- |
-| **Account** | `server/python/valorai/account/` | **RF001, RF003, RF005, RF006**: Registration validation (CPF check digits, 16+ age verification, address, optional JPG/PNG/WebP avatar ≤ 2 MB), credential verification via injected `Hasher`, profile maintenance (`update_profile` keeping `cpf` and `email` immutable), and logical account deactivation (`inactive` status). |
-| **Session** | `server/python/valorai/session/` | **RF006, RF007**: Cryptographically random session tokens, `HttpOnly`/`SameSite=Strict`/`Secure` cookies (`valorai_session`), SHA-256 token hashes in D1, 30-minute idle timeout, 12-hour absolute cap, and session revocation on logout or deactivation. |
-| **Confirmation** | `server/python/valorai/confirmation/` | **RF002**: Single-use 6-digit confirmation codes (10-minute TTL, max 5 attempts, 60-second resend cooldown, max 3 issuances/hour) stored in `module_kv`. Confirmed accounts transition to `demo_confirmed` (`emailVerified: false`). |
+| **Account** | `server/python/valorai/account/` | **RF001, RF003, RF005, RF006, RF008, RF009**: Registration validation (CPF check digits, 16+ age verification, address, optional JPG/PNG/WebP avatar ≤ 2 MB), credential verification via injected `Hasher`, profile maintenance (`update_profile` keeping `cpf` and `email` immutable), password recovery (`recover_password`), authenticated password change (`change_password`), and logical account deactivation (`inactive` status). |
+| **Session** | `server/python/valorai/session/` | **RF006, RF007**: Cryptographically random session tokens, `HttpOnly`/`SameSite=Strict`/`Secure` cookies (`valorai_session`), SHA-256 token hashes in D1, 30-minute idle timeout, 12-hour absolute cap, and session revocation on logout, password change/recovery, or deactivation. |
+| **Confirmation & Mailer** | `server/python/valorai/confirmation/`, `mailer.py` | **RF002, RF008**: Single-use 6-digit confirmation codes (`code:`, 10-min TTL, 5 attempts, 60s cooldown, 3/hour) and segregated recovery codes (`recovery:`, 15-min TTL, 5 attempts, 60s cooldown, 5/hour) stored in `module_kv`. Supports `EMAIL_MODE=demo` (simulated inbox) and `EMAIL_MODE=resend` (`ResendMailer` via `mail.noti0ns.dev`). |
 | **Finance** | `server/python/valorai/finance/` | **RF004**: Validates and persists monthly income estimates, fixed monthly expenses, and financial objectives (`reserve`, `reduce`, `debts`, `organize`, `invest`) in integer cents. |
-| **Ledger** | `server/python/valorai/ledger/` | **Operational Financial Management**: Handles the 3 transaction ingestion channels (`manual`, `import` CSV/OFX, `photo` receipt scan), enforces the 10 standardized categories with keyword auto-suggestion, evaluates configurable spending limits (`category`, `daily`, `card_share`) across 4 non-blocking alert levels (`ok`, `warning`, `reached`, `exceeded`), records goal contributions, and tracks guide progress. |
+| **Ledger** | `server/python/valorai/ledger/` | **Operational Financial Management**: Handles the 3 transaction ingestion channels (`manual`, `import` CSV/OFX, `photo` receipt scan), enforces the 10 standardized categories with keyword auto-suggestion, evaluates configurable spending limits (`category`, `daily`, `weekly`, `card_share`) across 4 non-blocking alert levels (`ok`, `warning`, `reached`, `exceeded`), records goal contributions, and tracks guide progress. |
 | **AI** | `server/python/valorai/ai/` | **AI Integration (`client.py`, `receipt.py`, `advisor.py`)**: Provider-agnostic OpenAI-Compatible client (`json_schema` strict mode). `AiReceiptExtractor` parses multimodal payment proofs with a 60s HTTP-`429` circuit breaker and heuristic fallback. `FinancialAdvisor` generates PII-free condensed summaries cached in `DurableKv` and revalidated **exclusively by material premises** (`should_regenerate_summary`, no TTL). |
 
 ### Seam & Adapter Pattern (`SqliteDb` vs. `DjangoDb`)
 All repositories in `server/python/valorai/storage.py` (`SqlAccounts`, `SqlSessions`, `SqlFinance`, `SqlLessons`, `SqlLedger`, `SqlAudit`) depend on a minimal synchronous protocol (`query` and `execute`):
-- **In-Process Unit Tests (`SqliteDb`)**: Runs against an in-memory Python `sqlite3` connection (`uv run --directory server/python pytest` executes 42 tests in < 1 s without requiring a browser or Worker runtime).
+- **In-Process Unit Tests (`SqliteDb`)**: Runs against an in-memory Python `sqlite3` connection (`uv run --directory server/python pytest` executes 46 tests in < 1 s without requiring a browser or Worker runtime).
 - **Cloudflare Worker Runtime (`DjangoDb`)**: Translates `?` placeholders to `%s` and `None` to `null` for `django_cf.db.backends.d1`.
 
 ---
 
 ## 3. Database Schema, Views & Triggers (Cloudflare D1)
 
-Schema migrations live in `server/migrations/` (`0001` through `0010`) and are applied via `pywrangler d1 migrations apply`:
+Schema migrations live in `server/migrations/` (`0001` through `0011`) and are applied via `pywrangler d1 migrations apply`:
 
 - **Core Tables (`0001_initial.sql`, `0002_dashboard_ledger.sql`, `0003_audit_triggers.sql`)**:
   - `accounts`: Identity, personal/address fields, `password_hash`, `status` (`pending`, `demo_confirmed`, `inactive`), `avatar_data`, financial profile (`income`, `fixed_expenses`, `goal`, `goal_target_cents`, `goal_current_cents`, `goal_monthly_cents`), and timestamps.
   - `sessions`: `token_hash` (SHA-256), `account_id`, `expires_at`, `last_active_at`, `revoked_at`.
   - `profile_changes`: Append-only record of edited profile fields (`RF003`).
   - `transactions`: Multi-channel ledger (`channel` ∈ `['manual', 'import', 'photo']`, `kind` ∈ `['income', 'fixed_expense', 'variable_expense']`, `amount_cents`, mandatory standardized `category`, `merchant_doc`, `confidence`, `status`, `payment_method`, `goal_contribution`, `external_ref`, `occurred_on`).
-  - `budget_limits`: Configurable spending limits (`scope` ∈ `['category', 'daily', 'card_share']`, `category`, `limit_cents`, `warn_percent`).
+  - `budget_limits`: Configurable spending limits (`scope` ∈ `['category', 'daily', 'weekly', 'card_share']` via `0011_weekly_limit_scope.sql`, `category`, `limit_cents`, `warn_percent`).
   - `lessons` & `lesson_progress`: Pre-seeded Markdown financial education guides (9 guides via `0006_rich_markdown_lessons.sql` and `0007_lesson_categories_and_more_guides.sql`; `Client` is the only system role with no admin UI) and per-account completion tracking.
   - `audit_context` & `audit_events`: One-row request context table (`id = 1`, `ip_hash`, `at`) and append-only audit log (`BEFORE UPDATE`/`DELETE` triggers raise `ABORT`).
 - **Views (`0008_views.sql`)**: `v_account_financial_summary` and `v_monthly_category_spending`.
@@ -162,6 +163,10 @@ Only `GET` and `POST` reach the API (`405` otherwise). Mutations use `POST` with
 | `/api/confirm` | `POST` | Validates the 6-digit code (`RF002`) and transitions the account to `demo_confirmed`. |
 | `/api/resend` | `POST` | Enforces cooldown/hourly caps and issues a fresh confirmation code. |
 | `/api/login` / `/api/logout` | `POST` | Authenticates via CPF/email + password (`RF006`) or revokes the active session (`RF007`). |
+| `/api/recovery/request` | `POST` | Issues a segregated 6-digit recovery code (`RF008`) with uniform response; dispatches via Resend when `EMAIL_MODE=resend`. |
+| `/api/recovery/demo-inbox` | `POST` | Returns the simulated recovery code in `EMAIL_MODE=demo` (`404` otherwise). |
+| `/api/recovery/reset` | `POST` | Validates recovery code, updates password hash (`bcrypt`), and revokes all active sessions (`RF008`). |
+| `/api/password` | `POST` | Validates current password, updates password hash (`RF009`), revokes prior sessions, and starts a fresh session. |
 | `/api/profile` | `POST` | Updates editable personal, address, and JPG/PNG/WebP avatar fields (`RF003`). |
 | `/api/finance` | `POST` | Saves monthly income, fixed expenses, and primary financial objective (`RF004`). |
 | `/api/deactivate` | `POST` | Logically deactivates the account (`RF005`), preserving ledger data and revoking sessions. |
@@ -169,7 +174,7 @@ Only `GET` and `POST` reach the API (`405` otherwise). Mutations use `POST` with
 | `/api/transactions/import` | `POST` | Parses and imports **OFX** and **CSV** bank statements with category auto-classification. |
 | `/api/transactions/receipt` | `POST` | Extracts transaction fields from receipt images via `AiReceiptExtractor` (`extractOnly` preview or save). |
 | `/api/ai/summary` | `POST` | Generates or returns cached PII-free AI financial summary (`force` optional, 30s cooldown). |
-| `/api/limits` | `POST` | Creates/updates or removes (`action: "delete"`) configurable spending limits (`category`, `daily`, `card_share`). |
+| `/api/limits` | `POST` | Creates/updates or removes (`action: "delete"`) configurable spending limits (`category`, `daily`, `weekly`, `card_share`). |
 | `/api/goal` | `POST` | Updates the primary financial goal or records a monetary contribution (`addContribution`). |
 | `/api/lessons/progress` | `POST` | Updates reading progress (`progressPct`, `completed`) for seeded educational guides. |
 
@@ -184,3 +189,4 @@ Only `GET` and `POST` reach the API (`405` otherwise). Mutations use `POST` with
 - **[ADR 0005 — Generic Audit Triggers Rendered From One Template](docs/adr/0005-generic-audit-triggers.md)**: `server/tools/audit_triggers.py` generator, `0009_generic_audit.sql`, `entity_id` tracking, and per-request `audit.unbind()`.
 - **[ADR 0006 — Conformance Fixes for Requirements Revision 1.4](docs/adr/0006-requirements-1-4-conformance.md)**: 10 standardized categories (`0010_standard_categories.sql`), 4 alert levels (`ok`, `warning`, `reached`, `exceeded`), WebP avatars, HSTS, and cross-browser Playwright projects.
 - **[ADR 0007 — OpenAI-Compatible AI Integration](docs/adr/0007-openai-compatible-ai-integration.md)**: Provider-agnostic `valorai/ai/` package, multimodal receipt extraction with `<canvas>` compression and `429` circuit breaker, PII-free `FinancialAdvisor` with premise-based `DurableKv` caching, and `free_prototype` transparency.
+- **[ADR 0008 — Password Recovery, Weekly Limits, and Resend Email](docs/adr/0008-password-recovery-weekly-limits-and-resend-email.md)**: Segregated `RF008` recovery and `RF009` password change flows, `weekly` limit scope (`0011_weekly_limit_scope.sql`), and `ResendMailer` transactional delivery via `mail.noti0ns.dev`.

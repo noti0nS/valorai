@@ -228,3 +228,33 @@ def test_non_standard_categories_are_rejected(world):
         world["ledger"].handle_limit(
             account, {"action": "upsert", "scope": "category", "category": "Inventada", "limit": 10}, "ip"
         )
+
+
+def test_weekly_limit_evaluates_current_week_expenses(world):
+    account = _confirmed_account(world)
+    today = world["clock"].today().date()
+    today_iso = today.isoformat()
+    from datetime import timedelta
+    last_month_iso = (today - timedelta(days=21)).isoformat()
+
+    world["ledger"].handle_limit(
+        account,
+        {"action": "upsert", "scope": "weekly", "limit": 400, "warnPercent": 80},
+        "ip",
+    )
+    # Expense outside current week should not count toward weekly limit
+    world["ledger"].handle_transaction(
+        account,
+        {"action": "create", "title": "Antiga", "amount": 500, "kind": "variable_expense", "category": "Outros", "occurredOn": last_month_iso},
+        "ip",
+    )
+    dash = world["ledger"].handle_transaction(
+        account,
+        {"action": "create", "title": "Semana", "amount": 350, "kind": "variable_expense", "category": "Alimentação", "occurredOn": today_iso},
+        "ip",
+    )
+    weekly = [lim for lim in dash["limits"] if lim["scope"] == "weekly"][0]
+    assert weekly["category"] == "Teto Semanal"
+    assert weekly["spent"] == 350
+    assert weekly["status"] == "warning"
+    assert weekly["percent"] == 88

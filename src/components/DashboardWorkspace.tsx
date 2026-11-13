@@ -7,7 +7,7 @@ import {
   BellRing, ArrowRight, Trash2, Sparkles,
   Search, CircleAlert, X, Target,
   LayoutGrid, ReceiptText, ChevronDown, UserRound,
-  SlidersHorizontal, Info, LogOut, UserX, Check
+  SlidersHorizontal, Info, LogOut, UserX, Check, KeyRound
 } from 'lucide-react';
 import { CompanyMark, ProductMark } from './BrandMark';
 import { ThemeToggle } from './ThemeToggle';
@@ -37,7 +37,7 @@ export type DashboardTransaction = {
 
 export type DashboardLimit = {
   id: string;
-  scope: 'category' | 'daily' | 'card_share';
+  scope: 'category' | 'daily' | 'weekly' | 'card_share';
   category: string;
   limit: number;
   spent: number;
@@ -513,6 +513,7 @@ export default function DashboardWorkspace({
   activeTab,
   onSelectTab,
   onEditFinanceProfile,
+  onOpenChangePassword,
   onOpenDeactivate,
   onOpenAbout,
   onLogout,
@@ -535,6 +536,7 @@ export default function DashboardWorkspace({
   activeTab: DashboardTab;
   onSelectTab: (tab: DashboardTab) => void;
   onEditFinanceProfile: () => void;
+  onOpenChangePassword: () => void;
   onOpenDeactivate: () => void;
   onOpenAbout: () => void;
   onLogout: () => void;
@@ -642,7 +644,7 @@ export default function DashboardWorkspace({
   const [importPreviewItems, setImportPreviewItems] = useState<ImportPreviewItem[] | null>(null);
 
   // Budget Limit State
-  const [limitScope, setLimitScope] = useState<'category' | 'daily' | 'card_share'>('category');
+  const [limitScope, setLimitScope] = useState<'category' | 'daily' | 'weekly' | 'card_share'>('category');
   const [limitCategory, setLimitCategory] = useState('Lazer');
   const [limitValue, setLimitValue] = useState('600');
   const [limitWarn, setLimitWarn] = useState('80');
@@ -1095,7 +1097,7 @@ export default function DashboardWorkspace({
       const res = await apiCall<{ dashboard: DashboardData }>('limits', {
         action: 'upsert',
         scope: limitScope,
-        category: limitScope === 'daily' ? 'Teto Diário' : limitScope === 'card_share' ? 'Supérfluos no Cartão' : limitCategory,
+        category: limitScope === 'daily' ? 'Teto Diário' : limitScope === 'weekly' ? 'Teto Semanal' : limitScope === 'card_share' ? 'Supérfluos no Cartão' : limitCategory,
         limit: numLimit,
         warnPercent: Number(limitWarn) || 80,
       });
@@ -1352,6 +1354,10 @@ export default function DashboardWorkspace({
                   <button type="button" className="dropdown-item" onClick={() => run(onEditFinanceProfile)}>
                     <SlidersHorizontal size={18} aria-hidden="true" />
                     <span>Ajustar perfil financeiro</span>
+                  </button>
+                  <button type="button" className="dropdown-item" onClick={() => run(onOpenChangePassword)}>
+                    <KeyRound size={18} aria-hidden="true" />
+                    <span>Alterar senha</span>
                   </button>
                   <button type="button" className="dropdown-item" onClick={() => run(onOpenAbout)}>
                     <Info size={18} aria-hidden="true" />
@@ -1978,9 +1984,11 @@ export default function DashboardWorkspace({
                             <small className="block-sub">
                               {lim.scope === 'daily'
                                 ? 'Teto de consumo diário'
-                                : lim.scope === 'card_share'
-                                  ? 'Limite percentual no cartão'
-                                  : 'Limite mensal da categoria'}
+                                : lim.scope === 'weekly'
+                                  ? 'Teto de consumo semanal'
+                                  : lim.scope === 'card_share'
+                                    ? 'Limite percentual no cartão'
+                                    : 'Limite mensal da categoria'}
                             </small>
                           </div>
                           <div className="limit-item-right">
@@ -2793,6 +2801,7 @@ export default function DashboardWorkspace({
                 >
                   <option value="category">Limite mensal por categoria (R$)</option>
                   <option value="daily">Teto de consumo diário (ex.: R$ 100,00/dia)</option>
+                  <option value="weekly">Teto de consumo semanal (ex.: R$ 500,00/semana)</option>
                   <option value="card_share">Limite percentual no cartão em variáveis (%)</option>
                 </select>
               </div>

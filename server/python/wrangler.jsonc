@@ -40,7 +40,7 @@
       "name": "valorai-prototype",
       "vars": {
         "ENVIRONMENT": "production",
-        "EMAIL_MODE": "demo",
+        "EMAIL_MODE": "resend",
         "TURNSTILE_SITE_KEY": "0x4AAAAAAFrPCsARbdASrFUU",
         "AI_MODE": "openai_compatible",
         "AI_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai",

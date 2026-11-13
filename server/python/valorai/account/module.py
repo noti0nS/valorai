@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from valorai.account.validation import profile_update_from
+from valorai.account.validation import password_message, profile_update_from
 from valorai.crypto import sha256_hex
 from valorai.errors import ApiError
 from valorai.kv import PrefixKv
@@ -144,6 +144,51 @@ class AccountModule:
         self.accounts.deactivate(account.id)
         sessions.revoke_all(account.id)
         confirmation.discard(account.id)
+
+    def find_active_by_email(self, email: object) -> Account | None:
+        text = email.strip().lower()[:200] if isinstance(email, str) else ""
+        if not text or "@" not in text:
+            return None
+        account = self.accounts.find_for_login(text, "")
+        if account is None or account.status == "inactive" or account.email != text:
+            return None
+        return account
+
+    def recover_password(self, email: object, code: object, new_password: object, confirm_password: object, confirmation, sessions, ip_hash: str) -> None:
+        errors: dict[str, str] = {}
+        pw_error = password_message(new_password)
+        if pw_error:
+            errors["newPassword"] = pw_error
+        if new_password != confirm_password:
+            errors["confirmPassword"] = "As senhas precisam ser iguais."
+        if errors:
+            raise ApiError(422, "Confira os campos destacados.", errors)
+        account = self.find_active_by_email(email)
+        if account is None:
+            raise ApiError(410, "Código inválido ou expirado. Solicite outro.")
+        confirmation.check_recovery(account.id, code)
+        assert isinstance(new_password, str)
+        self.accounts.update_password(account.id, self.hasher.hash(new_password))
+        confirmation.discard_recovery(account.id)
+        sessions.revoke_all(account.id)
+        self.audit.record(account.id, "password_recovered", ip_hash, self.clock.now())
+
+    def change_password(self, account: Account, current_password: object, new_password: object, confirm_password: object, sessions, ip_hash: str) -> None:
+        errors: dict[str, str] = {}
+        secret = current_password if isinstance(current_password, str) else ""
+        if len(secret) > 32 or not self.hasher.verify(secret, account.password_hash):
+            errors["currentPassword"] = "Senha atual incorreta."
+        pw_error = password_message(new_password)
+        if pw_error:
+            errors["newPassword"] = pw_error
+        if new_password != confirm_password:
+            errors["confirmPassword"] = "As senhas precisam ser iguais."
+        if errors:
+            raise ApiError(422, "Confira os campos destacados.", errors)
+        assert isinstance(new_password, str)
+        self.accounts.update_password(account.id, self.hasher.hash(new_password))
+        sessions.revoke_all(account.id)
+        self.audit.record(account.id, "password_changed", ip_hash, self.clock.now())
 
     def prune(self, now: int) -> None:
         self.attempts.prune(lambda value: value["window"] + 900 <= now and value["blockedUntil"] <= now)
