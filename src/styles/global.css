@@ -432,6 +432,7 @@ a { color: inherit; }
   flex-direction: column;
   gap: 2px;
 }
+.dropdown-panel.dropdown-panel-start { left: 0; right: auto; }
 .profile-panel { min-width: 280px; padding: 12px; gap: 10px; }
 .profile-panel-head {
   display: flex;
@@ -1144,6 +1145,7 @@ a { color: inherit; }
 }
 @media (max-width: 640px) {
   .app-shell { padding: 0 16px; }
+  .page-head-entry .dropdown-panel { left: 0; right: auto; }
   .site-header, .dash-header { height: 56px; gap: 8px; }
   .dash-header { margin: 0 -16px; padding: 0 16px; }
   .brand svg, .brand-mark svg { width: 96px; }

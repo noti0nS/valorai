@@ -403,12 +403,24 @@ export function Dropdown({
   children: (run: (action: () => void) => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [alignStart, setAlignStart] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setAlignStart(false);
+      return;
+    }
+    const panel = panelRef.current;
+    if (panel) {
+      const rect = panel.getBoundingClientRect();
+      if (rect.left < 8) {
+        setAlignStart(true);
+      }
+    }
     const onPointerDown = (e: PointerEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -449,10 +461,11 @@ export function Dropdown({
       </button>
       {open && (
         <div
+          ref={panelRef}
           id={panelId}
           role="group"
           aria-label={panelLabel}
-          className={`dropdown-panel ${panelClassName ?? ''}`}
+          className={`dropdown-panel ${alignStart ? 'dropdown-panel-start' : ''} ${panelClassName ?? ''}`}
         >
           {children(run)}
         </div>
@@ -763,13 +776,26 @@ export default function DashboardWorkspace({
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'OverconstrainedError') {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } else {
+          throw err;
+        }
+      }
       cameraStreamRef.current = stream;
       setCameraActive(true);
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'NotFoundError') {
+        cameraFallbackRef.current?.click();
+        return;
+      }
       setModalError('Não foi possível acessar a câmera. Verifique a permissão ou use "Enviar arquivo".');
     }
   }
