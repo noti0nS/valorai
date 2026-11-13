@@ -150,7 +150,7 @@ Fontes: [Workers e logs](https://developers.cloudflare.com/workers/platform/pric
 
 `server/python/wrangler.jsonc` identifica o Worker `valorai-prototype`, o D1 e o ambiente de produção. A credencial secreta do Turnstile fica no Worker como `TURNSTILE_SECRET_KEY` e não entra no repositório. A site key pública está no ambiente `production`. Para outra conta, crie os recursos correspondentes e atualize esses identificadores.
 
-Autentique o CLI usado pelo `pywrangler`. Para aplicar novas migrações **remotas**, em `server/python`:
+Autentique o CLI usado pelo `pywrangler`. O `npm run deploy` já aplica as migrações **remotas** antes de publicar; para aplicá-las sem publicar, em `server/python`:
 
 ```powershell
 uv run pywrangler d1 migrations apply valorai-prototype --remote

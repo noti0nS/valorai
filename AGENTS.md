@@ -17,7 +17,7 @@ Nulfinance Inc. financial-management prototype: Astro + React 19 frontend, Djang
 - `npm run test:e2e` = Playwright (`tests/browser`, 1 worker, `baseURL` `127.0.0.1:8787`). Prerequisites, in order: migrations applied, `npm run dev:api` running, and `npm run build` — the Worker serves `dist/`, so stale or missing `dist/` fails every test. `npx playwright install chromium` once.
 - Docker: `docker compose up --build` (Worker 8787 + Astro HMR 4321 on `API_URL=http://api:8787`); `docker compose run --rm test` runs `npm test` and `pytest`.
 - Node is `^22.23 || ^24.22 || ^26.12` (see `engines`). The Worker runtime is Python 3.14 (`pylock.toml` requires >=3.14.2) even though `pyproject.toml` says >=3.12.
-- Migrations, from `server/python`: `uv run pywrangler d1 migrations apply valorai-prototype --local` (or `--remote`, before deploys). `npm run deploy` builds and runs `pywrangler deploy --env production`; never deploy with `ENVIRONMENT=development`.
+- Migrations, from `server/python`: `uv run pywrangler d1 migrations apply valorai-prototype --local` (or `--remote`). `npm run deploy` builds, applies the `--remote` migrations, then runs `pywrangler deploy --env production`; never deploy with `ENVIRONMENT=development`.
 - In `wrangler.jsonc`, `d1_databases` and `durable_objects` are not inherited by `env.production` — keep the duplicated blocks in sync when editing bindings.
 
 ## Backend map
