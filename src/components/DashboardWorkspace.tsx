@@ -592,6 +592,8 @@ export default function DashboardWorkspace({
     fallbackReason?: string;
   } | null>(null);
   const [receiptConfirmedCheck, setReceiptConfirmedCheck] = useState(true);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
+  const [receiptScanning, setReceiptScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
@@ -819,16 +821,24 @@ export default function DashboardWorkspace({
     }
     stopCamera();
     setReceiptFileName('foto-camera.jpg');
+    setReceiptPreviewUrl(dataUrl);
     await handleExtractReceipt(undefined, 'foto-camera.jpg', receiptHint, dataUrl);
   }
 
-  function openReceiptModal() {
+  function resetReceiptFlow() {
+    stopCamera();
     setModalError('');
     setFieldErrs({});
     setReceiptFileName('');
-    setReceiptHint('');
+    setReceiptPreviewUrl(null);
+    setReceiptScanning(false);
     setExtractedReceipt(null);
     setReceiptConfirmedCheck(true);
+  }
+
+  function openReceiptModal() {
+    resetReceiptFlow();
+    setReceiptHint('');
     setActiveModal('receipt');
   }
 
@@ -963,6 +973,11 @@ export default function DashboardWorkspace({
   async function handleExtractReceipt(preset?: string, customFileName?: string, customHint?: string, customImageData?: string) {
     setModalError('');
     setActionBusy(true);
+    setReceiptScanning(true);
+    if (preset) {
+      setReceiptPreviewUrl(null);
+      if (customFileName) setReceiptFileName(customFileName);
+    }
     try {
       const res = await apiCall<{ extracted: NonNullable<typeof extractedReceipt> }>('transactions/receipt', {
         fileName: customFileName ?? (receiptFileName || 'comprovante-nfce.jpg'),
@@ -975,6 +990,7 @@ export default function DashboardWorkspace({
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Não foi possível ler o comprovante.');
     } finally {
+      setReceiptScanning(false);
       setActionBusy(false);
     }
   }
@@ -984,12 +1000,14 @@ export default function DashboardWorkspace({
     if (file.type.startsWith('image/')) {
       try {
         const compressed = await compressReceiptImage(file);
+        setReceiptPreviewUrl(compressed);
         await handleExtractReceipt(undefined, file.name, receiptHint, compressed);
         return;
       } catch {
         // Fallback to filename/hint extraction if browser fails to decode image
       }
     }
+    setReceiptPreviewUrl(null);
     await handleExtractReceipt(undefined, file.name, receiptHint);
   }
 
@@ -2339,222 +2357,313 @@ export default function DashboardWorkspace({
       )}
 
       {/* 2. Receipt AI Modal */}
-      {activeModal === 'receipt' && (
-        <LightDismissModal
-          title="Enviar foto de comprovante (IA)"
-          onClose={() => setActiveModal(null)}
-        >
-          <div className="modal-body">
-            {modalError && <div className="alert alert-error" role="alert"><CircleAlert size={16} /><span>{modalError}</span></div>}
-            <p>
-              Tire uma foto ou envie o arquivo de qualquer comprovante (cupom fiscal NFC-e/SAT, PIX, boleto, fatura de cartão ou maquininha). A IA identifica o valor pago, data e sugere a categoria para sua confirmação.
-            </p>
-            {aiEnabled && aiTier === 'free_prototype' && (
-              <p className="field-hint">
-                Protótipo Free Tier: utilize comprovantes de teste ou sem dados bancários sensíveis reais.
-              </p>
-            )}
-
-            <div className="preset-buttons" style={{ marginBottom: 4 }}>
-              <input
-                ref={cameraFallbackRef}
-                id="receiptCameraInput"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="sr-only"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void processReceiptFile(file);
-                }}
-              />
-              <button
-                type="button"
-                className="button button-primary"
-                style={{ flex: 1, justifyContent: 'center' }}
-                onClick={() => void (cameraActive ? stopCamera() : startCamera())}
-                disabled={actionBusy}
-              >
-                <Camera size={18} aria-hidden="true" />
-                <span>{cameraActive ? 'Fechar câmera' : 'Tirar foto'}</span>
-              </button>
-
-              <input
-                id="receiptFileInput"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/*,.pdf"
-                className="sr-only"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    stopCamera();
-                    void processReceiptFile(file);
-                  }
-                }}
-              />
-              <label
-                htmlFor="receiptFileInput"
-                className="button button-secondary"
-                style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }}
-              >
-                <FileUp size={18} aria-hidden="true" />
-                <span>Enviar arquivo</span>
-              </label>
-            </div>
-
-            {cameraActive && (
-              <div
-                style={{
-                  borderRadius: 12,
-                  overflow: 'hidden',
-                  border: '1px solid var(--line)',
-                  background: '#000',
-                  marginTop: 8,
-                }}
-              >
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{ width: '100%', maxHeight: 280, objectFit: 'cover', display: 'block' }}
-                />
-                <div style={{ display: 'flex', gap: 8, padding: 10, background: 'var(--surface)' }}>
-                  <button
-                    type="button"
-                    className="button button-primary"
-                    style={{ flex: 1, justifyContent: 'center' }}
-                    onClick={() => void captureCameraPhoto()}
-                    disabled={actionBusy}
-                  >
-                    <Camera size={18} aria-hidden="true" />
-                    <span>{actionBusy ? 'Processando…' : 'Capturar foto'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    onClick={stopCamera}
-                  >
-                    Cancelar
-                  </button>
+      {activeModal === 'receipt' && (() => {
+        const receiptStep: 'capture' | 'scanning' | 'review' = receiptScanning
+          ? 'scanning'
+          : extractedReceipt
+            ? 'review'
+            : 'capture';
+        return (
+          <LightDismissModal
+            title="Enviar foto de comprovante (IA)"
+            onClose={() => setActiveModal(null)}
+          >
+            <div className="modal-body">
+              <div className="receipt-stepper" aria-label="Etapas da leitura por IA">
+                <div className={`receipt-step ${receiptStep === 'capture' ? 'active' : 'done'}`}>
+                  <span className="receipt-step-num">1</span>
+                  <span>Capturar</span>
+                </div>
+                <div className={`receipt-step ${receiptStep === 'scanning' ? 'active' : receiptStep === 'review' ? 'done' : ''}`}>
+                  <span className="receipt-step-num">2</span>
+                  <span>Leitura IA</span>
+                </div>
+                <div className={`receipt-step ${receiptStep === 'review' ? 'active' : ''}`}>
+                  <span className="receipt-step-num">3</span>
+                  <span>Confirmar</span>
                 </div>
               </div>
-            )}
 
-            {receiptFileName && (
-              <p className="field-hint" style={{ marginTop: 4 }}>
-                Arquivo selecionado: <strong>{receiptFileName}</strong>
-              </p>
-            )}
-            <small className="field-hint">
-              Formatos suportados: JPG, PNG, WebP ou PDF • Redimensionamento automático no celular
-            </small>
+              {modalError && <div className="alert alert-error" role="alert"><CircleAlert size={16} /><span>{modalError}</span></div>}
 
-            <div className="sample-presets">
-              <span className="field-hint">Ou teste a extração com um comprovante de exemplo:</span>
-              <div className="preset-buttons">
-                <button
-                  type="button"
-                  className="button button-secondary button-small"
-                  onClick={() => handleExtractReceipt('supermarket', 'cupom-pao-de-acucar.jpg')}
-                  disabled={actionBusy}
-                >
-                  NFC-e Supermercado (R$ 342,80)
-                </button>
-                <button
-                  type="button"
-                  className="button button-secondary button-small"
-                  onClick={() => handleExtractReceipt('uber', 'recibo-uber.pdf')}
-                  disabled={actionBusy}
-                >
-                  Recibo Uber PDF (R$ 42,90)
-                </button>
-                <button
-                  type="button"
-                  className="button button-secondary button-small"
-                  onClick={() => handleExtractReceipt('restaurant', 'nota-restaurante.jpg')}
-                  disabled={actionBusy}
-                >
-                  Nota Bistrô (R$ 128,50)
-                </button>
-              </div>
+              <AnimatePresence mode="wait" initial={false}>
+                {receiptStep === 'capture' && (
+                  <motion.div
+                    key="receipt-capture"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                  >
+                    <p>
+                      Tire uma foto ou envie o arquivo de qualquer comprovante (cupom fiscal NFC-e/SAT, PIX, boleto, fatura de cartão ou maquininha). A IA identifica o valor pago, data e sugere a categoria para sua confirmação.
+                    </p>
+                    {aiEnabled && aiTier === 'free_prototype' && (
+                      <p className="field-hint">
+                        Protótipo Free Tier: utilize comprovantes de teste ou sem dados bancários sensíveis reais.
+                      </p>
+                    )}
+
+                    <div className="preset-buttons" style={{ marginBottom: 2 }}>
+                      <input
+                        ref={cameraFallbackRef}
+                        id="receiptCameraInput"
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void processReceiptFile(file);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="button button-primary"
+                        style={{ flex: 1, justifyContent: 'center' }}
+                        onClick={() => void (cameraActive ? stopCamera() : startCamera())}
+                        disabled={actionBusy}
+                      >
+                        <Camera size={18} aria-hidden="true" />
+                        <span>{cameraActive ? 'Fechar câmera' : 'Tirar foto'}</span>
+                      </button>
+
+                      <input
+                        id="receiptFileInput"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/*,.pdf"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            stopCamera();
+                            void processReceiptFile(file);
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor="receiptFileInput"
+                        className="button button-secondary"
+                        style={{ cursor: 'pointer', flex: 1, justifyContent: 'center' }}
+                      >
+                        <FileUp size={18} aria-hidden="true" />
+                        <span>Enviar arquivo</span>
+                      </label>
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                      {cameraActive && (
+                        <motion.div
+                          key="camera-viewfinder"
+                          className="receipt-camera-frame"
+                          initial={{ opacity: 0, scale: 0.97 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.97 }}
+                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="receipt-camera-video"
+                          />
+                          <div className="receipt-viewfinder" aria-hidden="true" />
+                          <div className="receipt-camera-bar">
+                            <button
+                              type="button"
+                              className="button button-primary"
+                              style={{ flex: 1, justifyContent: 'center' }}
+                              onClick={() => void captureCameraPhoto()}
+                              disabled={actionBusy}
+                            >
+                              <Camera size={18} aria-hidden="true" />
+                              <span>Capturar foto</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="button button-secondary"
+                              onClick={stopCamera}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {!cameraActive && (
+                      <>
+                        <small className="field-hint">
+                          Formatos suportados: JPG, PNG, WebP ou PDF • Redimensionamento automático no celular
+                        </small>
+
+                        <div className="sample-presets">
+                          <span className="field-hint">Ou teste a extração com um comprovante de exemplo:</span>
+                          <div className="preset-buttons">
+                            <button
+                              type="button"
+                              className="button button-secondary button-small"
+                              onClick={() => handleExtractReceipt('supermarket', 'cupom-pao-de-acucar.jpg')}
+                              disabled={actionBusy}
+                            >
+                              NFC-e Supermercado (R$ 342,80)
+                            </button>
+                            <button
+                              type="button"
+                              className="button button-secondary button-small"
+                              onClick={() => handleExtractReceipt('uber', 'recibo-uber.pdf')}
+                              disabled={actionBusy}
+                            >
+                              Recibo Uber PDF (R$ 42,90)
+                            </button>
+                            <button
+                              type="button"
+                              className="button button-secondary button-small"
+                              onClick={() => handleExtractReceipt('restaurant', 'nota-restaurante.jpg')}
+                              disabled={actionBusy}
+                            >
+                              Nota Bistrô (R$ 128,50)
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+
+                {receiptStep === 'scanning' && (
+                  <motion.div
+                    key="receipt-scanning"
+                    className="receipt-scan-stage"
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div className="receipt-scan-preview">
+                      {receiptPreviewUrl ? (
+                        <img src={receiptPreviewUrl} alt="Prévia do comprovante enviado" />
+                      ) : (
+                        <Sparkles size={40} className="receipt-scan-icon" aria-hidden="true" />
+                      )}
+                      <div className="receipt-scan-beam" aria-hidden="true" />
+                    </div>
+                    <div className="receipt-scan-copy">
+                      <strong>Analisando comprovante com IA…</strong>
+                      <small>Identificando estabelecimento, valor pago, data e categoria</small>
+                    </div>
+                  </motion.div>
+                )}
+
+                {receiptStep === 'review' && extractedReceipt && (
+                  <motion.form
+                    key="receipt-review"
+                    className="extracted-preview-box"
+                    onSubmit={handleConfirmReceipt}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <div className="receipt-review-bar">
+                      <div className="receipt-review-meta">
+                        {receiptPreviewUrl && (
+                          <img
+                            src={receiptPreviewUrl}
+                            alt="Comprovante capturado"
+                            className="receipt-review-thumb"
+                          />
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <strong>{receiptFileName || 'Comprovante'}</strong>
+                          <span className="tx-badge ia" style={{ marginTop: 4 }}>
+                            {extractedReceipt.source === 'fallback'
+                              ? `Fallback • ${extractedReceipt.confidence}%`
+                              : `Confiança IA: ${extractedReceipt.confidence}%`}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="button button-ghost button-small"
+                        onClick={resetReceiptFlow}
+                        disabled={actionBusy}
+                      >
+                        Trocar foto
+                      </button>
+                    </div>
+
+                    <div className="fields-grid">
+                      <div className="field wide">
+                        <label htmlFor="recTitle">Estabelecimento identificado</label>
+                        <input
+                          id="recTitle"
+                          value={extractedReceipt.title}
+                          onChange={(e) => setExtractedReceipt({ ...extractedReceipt, title: e.target.value })}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="recAmount">Valor extraído (R$)</label>
+                        <input
+                          id="recAmount"
+                          type="number"
+                          step="0.01"
+                          value={extractedReceipt.amount}
+                          onChange={(e) => setExtractedReceipt({ ...extractedReceipt, amount: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="recCategory">Categoria sugerida pela IA</label>
+                        <select
+                          id="recCategory"
+                          value={extractedReceipt.category}
+                          onChange={(e) => setExtractedReceipt({ ...extractedReceipt, category: e.target.value })}
+                        >
+                          {standardCategories.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="recDate">Data da nota</label>
+                        <input
+                          id="recDate"
+                          type="date"
+                          value={extractedReceipt.occurredOn}
+                          onChange={(e) => setExtractedReceipt({ ...extractedReceipt, occurredOn: e.target.value })}
+                        />
+                      </div>
+                      <div className="field">
+                        <label htmlFor="recDoc">CNPJ / Referência NFC-e</label>
+                        <input
+                          id="recDoc"
+                          value={extractedReceipt.merchantDoc}
+                          onChange={(e) => setExtractedReceipt({ ...extractedReceipt, merchantDoc: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <label className="checkbox">
+                      <input
+                        type="checkbox"
+                        checked={receiptConfirmedCheck}
+                        onChange={(e) => setReceiptConfirmedCheck(e.target.checked)}
+                      />
+                      <span>Confirmo que conferi o valor e a categoria sugerida pela leitura inteligente.</span>
+                    </label>
+                    <button type="submit" className="button button-primary button-block" disabled={actionBusy}>
+                      {actionBusy ? 'Lançando…' : 'Confirmar e lançar comprovante'}
+                    </button>
+                  </motion.form>
+                )}
+              </AnimatePresence>
             </div>
-
-            {extractedReceipt && (
-              <form className="extracted-preview-box" onSubmit={handleConfirmReceipt}>
-                <div className="extracted-head">
-                  <strong>Dados extraídos do comprovante</strong>
-                  <span className="tx-badge ia">
-                    {extractedReceipt.source === 'fallback'
-                      ? `Fallback • ${extractedReceipt.confidence}%`
-                      : `Confiança IA: ${extractedReceipt.confidence}%`}
-                  </span>
-                </div>
-                <div className="fields-grid">
-                  <div className="field wide">
-                    <label htmlFor="recTitle">Estabelecimento identificado</label>
-                    <input
-                      id="recTitle"
-                      value={extractedReceipt.title}
-                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, title: e.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="recAmount">Valor extraído (R$)</label>
-                    <input
-                      id="recAmount"
-                      type="number"
-                      step="0.01"
-                      value={extractedReceipt.amount}
-                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, amount: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="recCategory">Categoria sugerida pela IA</label>
-                    <select
-                      id="recCategory"
-                      value={extractedReceipt.category}
-                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, category: e.target.value })}
-                    >
-                      {standardCategories.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="recDate">Data da nota</label>
-                    <input
-                      id="recDate"
-                      type="date"
-                      value={extractedReceipt.occurredOn}
-                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, occurredOn: e.target.value })}
-                    />
-                  </div>
-                  <div className="field">
-                    <label htmlFor="recDoc">CNPJ / Referência NFC-e</label>
-                    <input
-                      id="recDoc"
-                      value={extractedReceipt.merchantDoc}
-                      onChange={(e) => setExtractedReceipt({ ...extractedReceipt, merchantDoc: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={receiptConfirmedCheck}
-                    onChange={(e) => setReceiptConfirmedCheck(e.target.checked)}
-                  />
-                  <span>Confirmo que conferi o valor e a categoria sugerida pela leitura inteligente.</span>
-                </label>
-                <button type="submit" className="button button-primary button-block" disabled={actionBusy}>
-                  {actionBusy ? 'Lançando…' : 'Confirmar e lançar comprovante'}
-                </button>
-              </form>
-            )}
-          </div>
-        </LightDismissModal>
-      )}
+          </LightDismissModal>
+        );
+      })()}
 
       {/* 3. Batch Import (OFX / CSV / Excel) Modal */}
       {activeModal === 'import' && (
