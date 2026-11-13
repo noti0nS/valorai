@@ -60,7 +60,18 @@ def test_sql_store_uses_the_existing_schema_and_keeps_finance_after_deactivation
     assert len(dash["limits"]) == 1
     assert len(accounts.list_profile_changes(created.id)) == 1
     titles = [row["id"] for row in lessons.list()]
-    assert titles == ["due-dates", "emergency-fund", "first-budget"]
+    assert titles == [
+        "annual-expenses",
+        "credit-card-control",
+        "debt-exit",
+        "due-dates",
+        "emergency-fund",
+        "first-budget",
+        "first-investments",
+        "invisible-spending",
+        "irregular-income",
+    ]
+    assert all("## " in row["body"] for row in lessons.list())
 
 
 class _Codes:

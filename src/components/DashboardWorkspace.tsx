@@ -305,7 +305,7 @@ async function squareAvatar(file: File, size = 256): Promise<string> {
   }
 }
 
-export function LightDismissModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function LightDismissModal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const backdropPointerDownRef = useRef(false);
 
@@ -328,7 +328,7 @@ export function LightDismissModal({ title, children, onClose }: { title: string;
           try { node.showModal(); } catch { /* already open */ }
         }
       }}
-      className="modal"
+      className={wide ? 'modal modal-wide' : 'modal'}
       onCancel={(event) => {
         // Ignore bubbling `cancel` events dispatched by child controls
         // such as <input type="file">, <input type="date">, or <select>.

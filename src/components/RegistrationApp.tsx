@@ -5,6 +5,7 @@ import { CompanyMark, ProductMark } from './BrandMark';
 import { ThemeToggle } from './ThemeToggle';
 import { personalSchema, accessSchema, financeSchema, fieldErrors, goals, maskCpf, maskPhone, maskPostal, digits, states } from '../../shared/validation';
 import DashboardWorkspace, { LightDismissModal, type AccountSummary, type DashboardData, type DashboardLesson, type ProfileData } from './DashboardWorkspace';
+import { MarkdownContent } from './MarkdownContent';
 
 type Account = AccountSummary;
 type Config = { emailMode: string; siteKey: string; confirmation: { seconds: number; attempts: number; resendSeconds: number } };
@@ -63,8 +64,8 @@ function Field({ label, id, error, children, hint, wide = false }: { label: stri
   return <div className={`field ${wide ? 'wide' : ''} ${error ? 'has-error' : ''}`}><label htmlFor={id}>{label}</label>{children}
     {error ? <span className="field-error" id={`${id}-help`}><CircleAlert size={13} />{error}</span> : hint ? <span className="field-hint" id={`${id}-help`}>{hint}</span> : null}</div>;
 }
-function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
-  return <LightDismissModal title={title} onClose={onClose}>{children}</LightDismissModal>;
+function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
+  return <LightDismissModal title={title} onClose={onClose} wide={wide}>{children}</LightDismissModal>;
 }
 const channelIcon = { manual: PenLine, import: FileUp, photo: Camera };
 const sample = [
@@ -396,9 +397,9 @@ export default function RegistrationApp() {
       <p>Use este código para confirmar seu cadastro:</p><div className="inbox-code">{inbox.code}</div><p className="field-hint">Uso único. Nenhum e-mail foi enviado.</p>
       <button className="button button-primary button-block" onClick={() => { setCode(inbox.code); setModal(null); }}>Usar este código<ArrowRight size={18} /></button></> : <p role="status">Abrindo mensagem…</p>}</div></Modal>}
     {modal === 'deactivate' && <Modal title="Desativar sua conta?" onClose={() => { setModal(null); setDeactivatePassword(''); }}><form className="modal-body" onSubmit={async e => { e.preventDefault(); setBusy(true); setDeactivateError(''); try { await api('deactivate', { password: deactivatePassword }); setModal(null); setAccount(null); setDashboard(null); setProfile(null); setView('deactivated'); setDeactivatePassword(''); } catch (e) { setDeactivateError(e instanceof Error ? e.message : 'Tente novamente.'); } finally { setBusy(false); } }}><p>O acesso será encerrado em todos os dispositivos. Seu cadastro e suas estimativas serão preservados; nada é apagado.</p><Field id="deactivatePassword" label="Confirme sua senha" error={deactivateError}><input id="deactivatePassword" type="password" autoComplete="current-password" value={deactivatePassword} onChange={e => setDeactivatePassword(e.target.value)} required maxLength={32} /></Field><button className="button button-danger button-block" disabled={busy}>{busy ? 'Desativando…' : 'Confirmar desativação'}</button></form></Modal>}
-    {lesson && <Modal title={lesson.title} onClose={() => setLesson(null)}><div className="modal-body lesson-body">
+    {lesson && <Modal title={lesson.title} onClose={() => setLesson(null)} wide><div className="modal-body lesson-body">
       <div className="lesson-modal-meta"><span className="tag"><Clock3 size={13} />{lesson.minutes} min de leitura</span>{lesson.progressPercent === 100 && <span className="pill-badge pill-success"><Check size={12} />Leitura concluída</span>}</div>
-      <p>{lesson.body}</p>
+      <MarkdownContent content={lesson.body} />
       <div className="modal-actions-row">
         {lesson.progressPercent !== 100 && <button type="button" className="button button-secondary" onClick={() => markLessonRead(lesson)}><Check size={16} />Marcar como concluído</button>}
         <button type="button" className="button button-primary" onClick={() => setLesson(null)}>Fechar guia</button>
