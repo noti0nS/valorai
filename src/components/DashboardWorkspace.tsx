@@ -6,7 +6,7 @@ import {
   BellRing, ArrowRight, Trash2, Lightbulb, Sparkles,
   Search, CircleAlert, X, Target,
   LayoutGrid, ReceiptText, ScanLine, ChevronDown, UserRound,
-  SlidersHorizontal, Info, LogOut, UserX, BadgeCheck, Check
+  SlidersHorizontal, Info, LogOut, UserX, Check
 } from 'lucide-react';
 import { CompanyMark, ProductMark } from './BrandMark';
 import { ThemeToggle } from './ThemeToggle';
@@ -283,6 +283,25 @@ async function extractXlsxText(file: File): Promise<string> {
     return rows.join('\n');
   } catch {
     return await file.text();
+  }
+}
+
+/** Center-crops an image file to a 256px square JPEG data URL (keeps avatars small and undistorted). */
+async function squareAvatar(file: File, size = 256): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    const side = Math.min(bitmap.width, bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+    return canvas.toDataURL('image/jpeg', 0.88);
+  } finally {
+    bitmap.close();
   }
 }
 
@@ -1140,12 +1159,6 @@ export default function DashboardWorkspace({
               Ciclo atual: <strong>{cycleLabel}</strong> • {tabMeta[activeTab].subtitle}
             </p>
           </div>
-          {activeTab === 'overview' && (
-            <span className="guided-badge">
-              <BadgeCheck size={16} aria-hidden="true" />
-              Planejamento guiado por ritmo e equilíbrio
-            </span>
-          )}
           <Dropdown
             className="page-head-entry"
             triggerClassName="button button-primary new-entry-trigger"
@@ -1186,9 +1199,6 @@ export default function DashboardWorkspace({
                       <NumberFlow aria-hidden="true" value={freeBalance} locales="pt-BR" format={moneyFormat} />
                     </div>
                   </div>
-                  <p className="hero-caption">
-                    Margem livre calculada para despesas do dia e aportes estratégicos.
-                  </p>
                 </div>
 
                 <div className="metrics-split">
@@ -1226,7 +1236,6 @@ export default function DashboardWorkspace({
                       <span><i className="dot-variable" />{variableShare}% Variáveis</span>
                       <span><i className="dot-reserve" />{reserveShare}% Reserva</span>
                     </div>
-                    <span className="dist-tag">100% DISTRIBUÍDO</span>
                   </div>
                 </div>
 
@@ -1248,9 +1257,7 @@ export default function DashboardWorkspace({
                   <div>
                     <div className="ledger-title-row">
                       <h2 id="ledger-title">Últimas Movimentações</h2>
-                      <span className="today-badge">Hoje</span>
                     </div>
-                    <p className="card-sub">Lançamentos recentes organizados por data</p>
                   </div>
                   <div className="segment-pills" role="group" aria-label="Filtrar movimentações">
                     {([
@@ -2356,6 +2363,47 @@ export default function DashboardWorkspace({
         <LightDismissModal title="Manter Perfil Cadastral (RF003)" onClose={() => setActiveModal(null)}>
           <form className="modal-body" onSubmit={handleSaveProfile} noValidate>
             {modalError && <div className="alert alert-error" role="alert"><CircleAlert size={16} /><span>{modalError}</span></div>}
+            <div className="avatar-picker">
+              <span className="avatar-preview" aria-hidden="true">
+                {profAvatar ? <img src={profAvatar} alt="" /> : initials}
+              </span>
+              <div className="avatar-picker-body">
+                <strong>Foto de perfil</strong>
+                <small>JPG ou PNG até 2 MB. Ela será recortada em formato quadrado.</small>
+                <div className="avatar-picker-actions">
+                  <label className="button button-secondary button-small" htmlFor="profAvatar">
+                    {profAvatar ? 'Trocar foto' : 'Escolher foto'}
+                  </label>
+                  {profAvatar && (
+                    <button type="button" className="button button-ghost button-small" onClick={() => setProfAvatar(null)}>
+                      Remover
+                    </button>
+                  )}
+                </div>
+                <input
+                  id="profAvatar"
+                  className="sr-only"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={async (e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0];
+                    input.value = '';
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) {
+                      setModalError('O avatar deve ter no máximo 2 MB.');
+                      return;
+                    }
+                    try {
+                      setModalError('');
+                      setProfAvatar(await squareAvatar(file));
+                    } catch {
+                      setModalError('Não foi possível ler a imagem do avatar.');
+                    }
+                  }}
+                />
+              </div>
+            </div>
             <div className="fields-grid">
               <div className={`field wide ${fieldErrs.name ? 'has-error' : ''}`}>
                 <label htmlFor="profName">Nome completo</label>
@@ -2424,27 +2472,6 @@ export default function DashboardWorkspace({
                 {fieldErrs.city && <span className="field-error"><CircleAlert size={13} />{fieldErrs.city}</span>}
               </div>
 
-              <div className="field wide">
-                <label htmlFor="profAvatar">Avatar opcional (JPG ou PNG até 2 MB)</label>
-                <input
-                  id="profAvatar"
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (file.size > 2 * 1024 * 1024) {
-                      setModalError('O avatar deve ter no máximo 2 MB.');
-                      return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      if (typeof reader.result === 'string') setProfAvatar(reader.result);
-                    };
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </div>
             </div>
 
             {profile?.history && profile.history.length > 0 && (
