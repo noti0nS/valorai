@@ -15,7 +15,7 @@ A persistência de dados utiliza **Cloudflare D1** (compatível com **SQLite**),
 | Critério | Pontuação | Status | Onde está implementado |
 | :--- | :---: | :---: | :--- |
 | **DDL mantendo as 4 integridades** (Entidade, Referencial, Domínio e Chave/Semântica) | 1,0 | [x] Atendido | `0001_initial.sql`, `0002_dashboard_ledger.sql`, `0003_audit_triggers.sql`, `0004_goal_and_session_triggers.sql` |
-| **Criação de Trigger no banco** | 1,0 | [x] Atendido | `0003_audit_triggers.sql`, `0004_goal_and_session_triggers.sql`, `0005_account_audit_triggers.sql` (21 triggers) |
+| **Criação de Trigger no banco** | 1,0 | [x] Atendido | `0003_audit_triggers.sql`, `0004_goal_and_session_triggers.sql`, `0005_account_audit_triggers.sql` (21 triggers). A migração `0009_generic_audit.sql` substituiu depois os triggers de auditoria de dados de 0003 e 0005 por triggers genéricos gerados de um único modelo (`server/tools/audit_triggers.py`); o esquema completo passa a ter 19 triggers. As seções abaixo descrevem as migrações 0003 e 0005 como foram aplicadas originalmente |
 | **Criação de campo indexado** | 1,0 | [x] Atendido | `0001_initial.sql`, `0002_dashboard_ledger.sql` (7 índices explícitos `CREATE INDEX`) |
 | **Criação de Contas e Permissões (DCL)** | 1,0 | [ ] Não aplicável ao SGBD | Limitação nativa do SQLite / Cloudflare D1 (justificativa na Seção 4) |
 | **Criação de View** | 1,0 | [x] Atendido | `0008_views.sql` (2 views analíticas e de projeção segura) |

@@ -117,11 +117,34 @@ def test_triggers_record_data_changes_with_the_bound_request_context():
     limit_id = ledger.ledger.list_limits(created.id)[0].id
     ledger.handle_limit(created, {"action": "delete", "id": limit_id}, "hash-1")
     assert _events(db) == [
-        "registration_created", "transaction_created", "transaction_status_toggled", "transaction_updated",
-        "transaction_updated", "transaction_deleted", "budget_limit_updated", "budget_limit_updated", "budget_limit_deleted",
+        "accounts.insert", "transactions.insert", "transactions.update", "transactions.update",
+        "transactions.update", "transactions.delete", "budget_limits.insert", "budget_limits.update", "budget_limits.delete",
     ]
-    rows = db.query("SELECT ip_hash, created_at FROM audit_events WHERE event = 'transaction_created'", (), ("ip_hash", "created_at"))
+    rows = db.query("SELECT ip_hash, created_at, entity_id FROM audit_events WHERE event = 'transactions.insert'", (), ("ip_hash", "created_at", "entity_id"))
     assert (rows[0]["ip_hash"], rows[0]["created_at"]) == ("hash-1", NOW + 5)
+    # Every data event names the row it touched, including a delete.
+    deleted = db.query("SELECT entity_id FROM audit_events WHERE event = 'transactions.delete'", (), ("entity_id",))
+    assert deleted[0]["entity_id"] == tx_id == rows[0]["entity_id"]
+
+
+def test_context_is_reset_after_a_request_so_stray_writes_are_visibly_unbound():
+    db, audit, _account, _ledger, created = _sql_world()
+    audit.bind("hash-1", NOW + 5)
+    audit.unbind()
+    SqlAccounts(db).update_finance(created.id, 100000, 50000, "reserve", NOW)
+    row = db.query("SELECT ip_hash, created_at FROM audit_events WHERE event = 'accounts.update'", (), ("ip_hash", "created_at"))[0]
+    assert (row["ip_hash"], row["created_at"]) == ("unbound", 0)
+
+
+def test_generated_migration_matches_the_generator():
+    import importlib.util
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location("audit_triggers", root / "tools" / "audit_triggers.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    migration = (root / "migrations" / "0009_generic_audit.sql").read_text(encoding="utf-8")
+    assert migration == module.render()
 
 
 def test_audit_and_profile_history_are_append_only():
@@ -132,7 +155,7 @@ def test_audit_and_profile_history_are_append_only():
         "name": "Outro Nome", "birthDate": "1995-06-15", "phone": "(82) 99999-1111",
         "postalCode": "57020-000", "state": "AL", "city": "Maceió",
     }, "ip")
-    assert "profile_updated" in _events(db)
+    assert "accounts.update" in _events(db)
     for sql in (
         "UPDATE audit_events SET event = 'x'", "DELETE FROM audit_events",
         "UPDATE profile_changes SET changed_fields = '[]'", "DELETE FROM profile_changes",
@@ -145,17 +168,7 @@ def test_deactivation_event_comes_from_the_status_trigger_once():
     db, _audit, account, _ledger, created = _sql_world()
     sessions = SqlSessions(db)
     account.deactivate(created, "TestingOnly8", sessions, _Codes(), "ip")
-    assert _events(db).count("account_deactivated") == 1
-
-
-def test_validation_flip_is_labelled_validated():
-    db, audit, _account, ledger, created = _sql_world()
-    audit.bind("h", NOW)
-    ledger.handle_transaction(created, {"action": "create", "title": "Mercado", "amount": 10.0, "kind": "variable_expense", "category": "Alimentação & Mercado"}, "h")
-    tx_id = ledger.ledger.list_transactions(created.id)[0].id
-    db.execute("UPDATE transactions SET validated = 0 WHERE id = ?", (tx_id,))
-    ledger.handle_transaction(created, {"action": "validate", "id": tx_id}, "h")
-    assert _events(db)[-1] == "transaction_validated"
+    assert _events(db).count("accounts.status.inactive") == 1
 
 
 def test_goal_contribution_balance_is_kept_by_triggers():
@@ -171,6 +184,8 @@ def test_goal_contribution_balance_is_kept_by_triggers():
     # Deleting the contribution takes it back out.
     ledger.handle_transaction(created, {"action": "delete", "id": tx.id}, "h")
     assert _goal_cents(db, created.id) == 10000
+    # Only the goal screen's own save logged an account edit; the trigger-driven balance moves did not.
+    assert _events(db).count("accounts.update") == 1
     # Without a recorded transaction the app still adds the contribution itself.
     fresh = SqlAccounts(db).find_by_id(created.id)
     ledger.handle_goal(fresh, {"contribution": 20.0, "recordTransaction": False}, "h")
@@ -215,8 +230,8 @@ def test_account_lifecycle_events_come_from_triggers():
     accounts = SqlAccounts(db)
     accounts.mark_demo_confirmed(created.id)
     accounts.update_finance(created.id, 100000, 50000, "reserve", NOW)
-    assert _events(db) == ["registration_created", "demo_confirmation_completed", "financial_profile_updated"]
-    row = db.query("SELECT ip_hash, created_at FROM audit_events WHERE event = 'financial_profile_updated'", (), ("ip_hash", "created_at"))[0]
+    assert _events(db) == ["accounts.insert", "accounts.status.demo_confirmed", "accounts.update"]
+    row = db.query("SELECT ip_hash, created_at FROM audit_events WHERE event = 'accounts.update'", (), ("ip_hash", "created_at"))[0]
     assert (row["ip_hash"], row["created_at"]) == ("h", NOW + 1)
 
 

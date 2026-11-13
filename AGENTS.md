@@ -26,7 +26,7 @@ Nulfinance Inc. financial-management prototype: Astro + React 19 frontend, Djang
 - GETs: `config`, `session`, `lessons`, `dashboard`, `demo-inbox`. POSTs: `register`, `login`, `logout`, `resend`, `confirm`, `finance`, `profile`, `transactions`, `transactions/import`, `transactions/receipt`, `limits`, `goal`, `lessons/progress`, `deactivate`.
 - Domain modules (`account/`, `session/`, `confirmation/`, `finance/`, `ledger/`) never touch HTTP or the ORM; they receive repositories from `storage.py` (protocol: `query`/`execute`) plus injected clock, hasher, KV and audit.
 - Repository SQL uses SQLite `?` placeholders; `DjangoDb` rewrites them to `%s` and `None` to `null` for `django-cf`. Keep `?`, do not copy `%s` in.
-- `django-cf` 0.2.17 sets `supports_transactions = False`: there are no transactions, so commit primary state before audit writes.
+- `django-cf` 0.2.17 sets `supports_transactions = False`: there are no transactions, so audit events for data changes come from the generic triggers in `0009_generic_audit.sql` (rendered by `server/tools/audit_triggers.py`; never edit the SQL by hand, and extend the generator's column list when `accounts` gains an editable column). Only application-recorded events (login, lessons, goal progress, demo seeding) are written after the primary write.
 - The Worker executes sync WSGI under the Durable Object: no `await` in domain code. Ephemeral state (codes, cooldowns, lockouts, throttles) goes through the synchronous `DurableKv` (`module_kv` table), not Workers KV.
 - `worker.py` injects its own directory into `sys.path` and fabricates the `valorai` package because `pywrangler` treats that directory as the module root. `python_modules/` and `.venv-workers/` are generated and gitignored.
 

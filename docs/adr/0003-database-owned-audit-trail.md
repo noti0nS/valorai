@@ -1,5 +1,7 @@
 # ADR 0003: Database-Owned Audit Trail and Integrity Triggers
 
+> Section 1 (the per-event audit triggers and event names) is replaced by [ADR 0005](./0005-generic-audit-triggers.md), which uses one generic trigger shape per table and adds `entity_id`. The rest of this record still holds, except that the `audit_context` row is now reset after every request.
+
 Date: 12 November 2026. This record covers migrations `0003_audit_triggers.sql`, `0004_goal_and_session_triggers.sql` and `0005_account_audit_triggers.sql` (commits `f2d5b67`, `cd71a11`, `6739260`). It builds on the write-ordering rule in [ADR 0001](./0001-django-workers-architecture.md) and [ADR 0002](./0002-dashboard-ledger-and-stitch-workspace.md) and replaces it for the events listed below.
 
 ## Context

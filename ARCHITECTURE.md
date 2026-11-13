@@ -100,13 +100,13 @@ Schema migrations live in `server/migrations/` and are applied via `pywrangler d
   - `financial_profiles`: `account_id`, `monthly_income_cents`, `fixed_expenses_cents`, `primary_objective`.
   - `financial_goals`: `account_id`, `objective`, `name`, `target_amount_cents`, `current_amount_cents`, `target_date`.
   - `educational_lessons`: Pre-seeded financial education guides (`Client` is the only system role; no admin backoffice exists).
-  - `audit_events`: Append-only security and domain event log (`account.registered`, `account.demo_confirmed`, `account.profile_updated`, `account.deactivated`, `ledger.transaction_created`, `ledger.transactions_imported`, etc.).
+  - `audit_events`: Append-only security and domain event log. Data changes are written by generic triggers (migration `0009_generic_audit.sql`) as `<table>.<insert|update|delete>` (for example `transactions.delete`) with the changed row in `entity_id`, plus `accounts.status.demo_confirmed` and `accounts.status.inactive`. Login, goal progress, lesson progress and demo seeding events are written by the application (`login_succeeded`, `login_failed`, `goal_progress_updated`, `lesson_progress_updated`, `demo_cycle_seeded`). See [ADR 0005](./docs/adr/0005-generic-audit-triggers.md).
 - **`0002_dashboard_ledger.sql`**:
   - `financial_transactions`: Multi-channel ledger (`entry_channel` ∈ `['manual', 'import_file', 'receipt_ai']`, `direction` ∈ `['income', 'expense']`, `amount_cents`, mandatory `category`, `merchant`, `merchant_doc`, `confidence`, `external_ref`, `notes`, `occurred_on`).
   - `spending_limits`: Category budgets per period (`daily`, `weekly`, `monthly`) with `limit_cents` and `active` flag.
   - `lesson_progress`: Per-account completion tracking (`progress_pct`, `completed`) for seeded educational guides.
 
-> **Note on D1 Transactions**: `django-cf` 0.2.17 sets `supports_transactions = False`. Multi-statement operations order primary state mutations before secondary audit writes so core state is committed first.
+> **Note on D1 Transactions**: `django-cf` 0.2.17 sets `supports_transactions = False`. Audit events for data changes are therefore written by database triggers in the same statement as the change ([ADR 0003](./docs/adr/0003-database-owned-audit-trail.md), [ADR 0005](./docs/adr/0005-generic-audit-triggers.md)). Only events with no row change (login, lessons, demo seeding) are written by the application after the primary write.
 
 ---
 

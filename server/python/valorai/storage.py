@@ -134,6 +134,9 @@ class MemoryAudit:
     def bind(self, ip_hash: str, now: int) -> None:
         """Memory stores have no triggers, so there is no request context to bind."""
 
+    def unbind(self) -> None:
+        """Nothing was bound."""
+
 
 class MemoryLessons:
     def __init__(self, lessons: list[dict] | None = None):
@@ -403,14 +406,22 @@ class SqlSessions:
 
 
 class SqlAudit:
-    """Identity events are recorded here; data-change events come from triggers (migration 0003)."""
+    """Identity events are recorded here; data-change events come from generic triggers (migration 0009)."""
 
     def __init__(self, db: SqliteDb):
         self.db = db
+        self.bound = False
 
     def bind(self, ip_hash: str, now: int) -> None:
         """Give the audit triggers the IP hash and clock of the current request."""
         self.db.execute("UPDATE audit_context SET ip_hash = ?, at = ? WHERE id = 1", (ip_hash, now))
+        self.bound = True
+
+    def unbind(self) -> None:
+        """Reset the context so a write outside a request is visibly 'unbound' instead of reusing the last request."""
+        if self.bound:
+            self.db.execute("UPDATE audit_context SET ip_hash = 'unbound', at = 0 WHERE id = 1")
+            self.bound = False
 
     def record(self, account_id: str | None, event: str, ip_hash: str, created_at: int) -> None:
         self.db.execute(

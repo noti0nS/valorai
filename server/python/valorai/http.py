@@ -76,6 +76,8 @@ class RegistrationApi:
         except Exception:
             self.log()
             return _fail(ApiError(500, "Não foi possível concluir agora. Tente novamente em instantes."))
+        finally:
+            self.account.audit.unbind()
 
     def _handle(self, method: str, url: str, headers: dict[str, str], body: bytes) -> Result:
         parsed = urlparse(url)
