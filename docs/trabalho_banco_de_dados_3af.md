@@ -365,6 +365,178 @@ GROUP BY
   bl.warn_percent;
 ```
 
+> Nota: a definição vigente de `v_monthly_category_spending` foi recriada em `0011_weekly_limit_scope.sql` (por causa do `RENAME` de `budget_limits`); a lógica é a mesma da `0008`.
+
+---
+
+### 3.4. Mapeamento: onde construir views mais simples
+
+As duas views acima concentram vários conceitos ao mesmo tempo (projeção segura, agregação por tipo, status, progresso de meta, junção com limites, percentual de uso). Isso as torna difíceis de ler, testar e reaproveitar. A proposta abaixo quebra cada uma em **views pequenas, de uma responsabilidade**, e as compõe por `JOIN`.
+
+#### 3.4.1. Diagnóstico das views atuais
+
+| View atual | Responsabilidades misturadas | Complexidade |
+| --- | --- | --- |
+| `v_account_financial_summary` | (1) projeção segura de `accounts` (sem `cpf`/`password_hash`); (2) progresso da meta (`CASE` + `ROUND` + `MIN`); (3) 4 agregados condicionais sobre `transactions` (`SUM(CASE...)`); (4) `GROUP BY` com 10 colunas só para acomodar o `LEFT JOIN` | `LEFT JOIN` + `GROUP BY` extenso + 4 `CASE` |
+| `v_monthly_category_spending` | (1) classificação de "despesa" (`kind IN (...)`); (2) agrupamento por mês via `SUBSTR`; (3) agregação por categoria; (4) junção com limite; (5) percentual de uso | `LEFT JOIN` + `GROUP BY` com colunas do limite + `CASE` |
+
+Causas recorrentes: a regra "o que é despesa" (`kind IN ('fixed_expense','variable_expense')`) aparece 4 vezes; a extração do mês (`SUBSTR(occurred_on,1,7)`) está embutida; e o `GROUP BY` carrega colunas apenas para satisfazer o `LEFT JOIN`.
+
+#### 3.4.2. Mapa de views simples propostas
+
+| # | View proposta | Fonte | Responsabilidade única | Substitui/alimenta | Complexidade |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `v_account_public` | `accounts` | Projeção segura: só colunas não sensíveis | Parte (1) do resumo financeiro; reaproveitável em perfil/sessão | Nenhum `JOIN`/agregação |
+| 2 | `v_account_goal_progress` | `accounts` | Progresso da meta em % | Parte (2) do resumo financeiro | Um `CASE` |
+| 3 | `v_expense_transactions` | `transactions` | Define "despesa" (fixa ou variável) em um único lugar | Base de #4, #6 e #7 | Só `WHERE` |
+| 4 | `v_account_transaction_totals` | `transactions` | Totais por conta: receitas, despesas, pendentes, quantidade | Parte (3) do resumo financeiro | `GROUP BY` de 1 coluna |
+| 5 | `v_transactions_by_month` | `transactions` | Adiciona a coluna `year_month` | Base de #6 e #8 | Sem agregação |
+| 6 | `v_monthly_category_expense` | #3 + #5 | Gasto por conta/mês/categoria, **sem** limites | Parte (2)(3) do gasto mensal | `GROUP BY` de 3 colunas |
+| 7 | `v_pending_expenses` | #3 | Despesas ainda não pagas (`status = 'pending'`) | Alertas e contas a pagar | Só `WHERE` |
+| 8 | `v_monthly_cashflow` | #5 | Receita x despesa por mês e saldo | Novo: gráfico/extrato mensal | `GROUP BY` de 2 colunas |
+| 9 | `v_category_limits` | `budget_limits` | Limites do escopo `category` apenas | Parte (4) do gasto mensal | Só `WHERE` |
+| 10 | `v_receipt_review_queue` | `transactions` | Transações de foto/importação ainda não validadas (`validated = 0`) | Novo: fila de validação de recibos | Só `WHERE` |
+| 11 | `v_lesson_progress_detail` | `lessons` + `lesson_progress` | Guia + percentual por conta | Novo: tela de Guias Práticos | `JOIN` simples |
+
+#### 3.4.3. Decomposição de `v_account_financial_summary`
+
+Em vez de uma view com `LEFT JOIN` + `GROUP BY` de 10 colunas, o resumo passa a ser uma composição de três views simples. Quem só precisa do perfil ou só dos totais consulta a view menor.
+
+```sql
+-- 1. Projeção segura (sem JOIN, sem agregação).
+CREATE VIEW IF NOT EXISTS v_account_public AS
+SELECT id AS account_id, name, email, status,
+       income AS declared_income_cents,
+       fixed_expenses AS declared_fixed_expenses_cents,
+       goal AS goal_name,
+       goal_target_cents, goal_current_cents, goal_monthly_cents
+FROM accounts;
+
+-- 2. Progresso da meta (apenas um CASE).
+CREATE VIEW IF NOT EXISTS v_account_goal_progress AS
+SELECT id AS account_id,
+       CASE WHEN goal_target_cents > 0
+            THEN ROUND(MIN(100.0, goal_current_cents * 100.0 / goal_target_cents), 2)
+            ELSE 0.0 END AS goal_progress_percent
+FROM accounts;
+
+-- 3. Totais de transações por conta (GROUP BY de uma única coluna).
+CREATE VIEW IF NOT EXISTS v_account_transaction_totals AS
+SELECT account_id,
+       COUNT(*) AS transaction_count,
+       SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END) AS total_income_cents,
+       SUM(CASE WHEN kind <> 'income' THEN amount_cents ELSE 0 END) AS total_expense_cents,
+       SUM(CASE WHEN kind <> 'income' AND status = 'pending' THEN amount_cents ELSE 0 END) AS pending_expense_cents
+FROM transactions
+GROUP BY account_id;
+
+-- Composição: reproduz v_account_financial_summary sem repetir regra nenhuma.
+CREATE VIEW IF NOT EXISTS v_account_financial_summary AS
+SELECT p.*, g.goal_progress_percent,
+       COALESCE(t.transaction_count, 0)      AS transaction_count,
+       COALESCE(t.total_income_cents, 0)     AS total_income_cents,
+       COALESCE(t.total_expense_cents, 0)    AS total_expense_cents,
+       COALESCE(t.pending_expense_cents, 0)  AS pending_expense_cents
+FROM v_account_public p
+JOIN v_account_goal_progress g ON g.account_id = p.account_id
+LEFT JOIN v_account_transaction_totals t ON t.account_id = p.account_id;
+```
+
+Ganhos: o `GROUP BY` de 10 colunas some; `v_account_public` pode ser usada sozinha onde hoje se lê `accounts` e há risco de vazar `cpf`/`password_hash`; o `CASE` do progresso da meta é testável isoladamente.
+
+#### 3.4.4. Decomposição de `v_monthly_category_spending`
+
+```sql
+-- 1. Definição única de "despesa".
+CREATE VIEW IF NOT EXISTS v_expense_transactions AS
+SELECT * FROM transactions
+WHERE kind IN ('fixed_expense', 'variable_expense');
+
+-- 2. Mês como coluna (sem agregação).
+CREATE VIEW IF NOT EXISTS v_expense_by_month AS
+SELECT account_id, SUBSTR(occurred_on, 1, 7) AS year_month,
+       category, amount_cents, status
+FROM v_expense_transactions;
+
+-- 3. Gasto por conta/mês/categoria, sem limites.
+CREATE VIEW IF NOT EXISTS v_monthly_category_expense AS
+SELECT account_id, year_month, category,
+       COUNT(*) AS expense_count,
+       SUM(amount_cents) AS spent_cents
+FROM v_expense_by_month
+GROUP BY account_id, year_month, category;
+
+-- 4. Apenas limites por categoria.
+CREATE VIEW IF NOT EXISTS v_category_limits AS
+SELECT account_id, category, limit_cents, warn_percent
+FROM budget_limits
+WHERE scope = 'category';
+
+-- Composição: GROUP BY já resolvido; o JOIN deixa de precisar de colunas do limite no GROUP BY.
+CREATE VIEW IF NOT EXISTS v_monthly_category_spending AS
+SELECT s.account_id, s.year_month, s.category, s.expense_count, s.spent_cents,
+       l.limit_cents, l.warn_percent,
+       CASE WHEN l.limit_cents > 0
+            THEN ROUND(s.spent_cents * 100.0 / l.limit_cents, 2) END AS limit_usage_percent
+FROM v_monthly_category_expense s
+LEFT JOIN v_category_limits l
+  ON l.account_id = s.account_id AND l.category = s.category;
+```
+
+Ganhos: a regra de despesa fica em um único ponto (hoje duplicada em 4 lugares); o `scope = 'category'` do limite também; e, como a agregação acontece **antes** do `JOIN`, o `GROUP BY` deixa de incluir `limit_cents`/`warn_percent`. Isso também resolve a fragilidade apontada em `0011_weekly_limit_scope.sql`, em que o `RENAME` de `budget_limits` obrigou a recriar a view: com `v_category_limits` isolando a dependência, só uma view pequena precisa mudar quando a tabela de limites mudar.
+
+#### 3.4.5. Views novas, simples, que atendem telas já existentes
+
+```sql
+-- Fluxo de caixa mensal (aba "Transações & Extratos" / Visão Geral).
+CREATE VIEW IF NOT EXISTS v_monthly_cashflow AS
+SELECT account_id, SUBSTR(occurred_on, 1, 7) AS year_month,
+       SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END)  AS income_cents,
+       SUM(CASE WHEN kind <> 'income' THEN amount_cents ELSE 0 END) AS expense_cents,
+       SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE -amount_cents END) AS balance_cents
+FROM transactions
+GROUP BY account_id, SUBSTR(occurred_on, 1, 7);
+
+-- Despesas pendentes (alertas / contas a pagar).
+CREATE VIEW IF NOT EXISTS v_pending_expenses AS
+SELECT id, account_id, title, amount_cents, category, occurred_on, payment_method
+FROM v_expense_transactions
+WHERE status = 'pending';
+
+-- Fila de validação de recibos e importações (canais 'photo' e 'import').
+CREATE VIEW IF NOT EXISTS v_receipt_review_queue AS
+SELECT id, account_id, title, amount_cents, category, channel, confidence, occurred_on
+FROM transactions
+WHERE validated = 0;
+
+-- Guias com progresso por conta (aba "Guias Práticos").
+CREATE VIEW IF NOT EXISTS v_lesson_progress_detail AS
+SELECT lp.account_id, l.id AS lesson_id, l.title, l.minutes,
+       lp.progress_percent, lp.updated_at
+FROM lesson_progress lp
+JOIN lessons l ON l.id = lp.lesson_id;
+```
+
+#### 3.4.6. Onde cada view simples poderia ser consumida
+
+| Local (código/tela) | Consulta hoje | View que simplifica |
+| --- | --- | --- |
+| `storage.py` — listagem do dashboard (`list_transactions`, `list_limits`) | `SELECT` direto em `transactions`/`budget_limits` com filtros repetidos | `v_expense_transactions`, `v_category_limits` |
+| Dashboard — cartões de receita/despesa/saldo | Agregação feita na aplicação | `v_account_transaction_totals`, `v_monthly_cashflow` |
+| Planejamento & Metas — barra de progresso | Cálculo do percentual no código | `v_account_goal_progress` |
+| Planejamento & Metas — alertas de limite | Soma por categoria e comparação no código | `v_monthly_category_spending` (recomposta) |
+| Transações & Extratos — revisão de recibos | Filtro `validated = 0` no código | `v_receipt_review_queue` |
+| Guias Práticos | `lessons` + `lesson_progress` em duas consultas | `v_lesson_progress_detail` |
+| Perfil/sessão | `SELECT * FROM accounts` (inclui `password_hash`) | `v_account_public` quando a senha não for necessária |
+
+#### 3.4.7. Cuidados na adoção
+
+* **Ordem de criação:** views que dependem de outras devem ser criadas depois (ex.: `v_expense_transactions` antes de `v_expense_by_month`). Em SQLite, `DROP VIEW` + `CREATE VIEW` na mesma migration é a forma segura de substituir as definições atuais.
+* **Dependência de `RENAME`:** o SQLite valida views dependentes em `ALTER TABLE ... RENAME` (já ocorreu na `0011`). Mudanças futuras em `transactions`/`budget_limits` devem remover as views dependentes antes e recriá-las depois.
+* **Compatibilidade:** `v_account_financial_summary` e `v_monthly_category_spending` mantêm as mesmas colunas, então o restante do documento (checklist e DDL) não muda de significado.
+* **Desempenho:** views no SQLite não são materializadas; empilhar muitas camadas é aceitável no volume do protótipo, e o índice `transactions_account_date` cobre os filtros por `account_id`.
+* **Status:** esta seção é uma **proposta de mapeamento**; as views das seções 3.4.3 a 3.4.5 ainda **não** estão em migration (a próxima seria `0012_simple_views.sql`).
+
 ---
 
 ## 4. Motivação para Não Implementação de Contas e Permissões (DCL)
