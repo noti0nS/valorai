@@ -41,8 +41,8 @@ export const accessSchema = z.object({
   email: z.email('Informe um e-mail válido.').max(200).transform((v) => v.trim().toLowerCase()),
   password: passwordSchema,
   confirmPassword: z.string(),
-  demoConsent: z.literal(true, { error: 'Confirme que está testando o protótipo.' }),
-}).refine((v) => v.password === v.confirmPassword, { path: ['confirmPassword'], message: 'As senhas precisam ser iguais.' });
+  demoConsent: z.literal(true, { error: 'Aceite o termo de consentimento para continuar.' }),
+}).refine((v) => v.password === v.confirmPassword, { path: ['confirmPassword'], message: 'As senhas não coincidem' });
 export const registrationSchema = personalSchema.and(accessSchema);
 export const goals = [
   { id: 'budget', title: 'Organizar meu orçamento', description: 'Entender para onde meu dinheiro vai.' },

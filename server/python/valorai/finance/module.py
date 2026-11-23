@@ -35,13 +35,13 @@ class FinanceModule:
         expenses = to_cents(body.get("fixedExpenses")) if isinstance(body, dict) else None
         goal = body.get("goal") if isinstance(body, dict) else None
         if income is None:
-            errors["income"] = "Informe um valor entre 0 e 100000000."
+            errors["income"] = "Informe um valor monetário válido maior ou igual a R$ 0,00"
         if expenses is None:
-            errors["fixedExpenses"] = "Informe um valor entre 0 e 100000000."
+            errors["fixedExpenses"] = "Informe um valor monetário válido maior ou igual a R$ 0,00"
         if goal not in GOALS:
-            errors["goal"] = "Selecione um objetivo."
+            errors["goal"] = "Selecione qual é o seu principal objetivo financeiro agora"
         if errors:
-            raise ApiError(422, "Confira os valores e selecione um objetivo.", errors)
+            raise ApiError(422, "Informe um valor monetário válido maior ou igual a R$ 0,00", errors)
         updated = self.accounts.update_finance(account.id, income, expenses, goal, self.clock.now())
         return updated
 

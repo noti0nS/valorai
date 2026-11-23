@@ -139,7 +139,7 @@ class RegistrationApi:
         if path == "/api/recovery/request":
             raw_email = payload.get("email")
             if not isinstance(raw_email, str) or "@" not in raw_email.strip():
-                raise ApiError(422, "Confira os campos destacados.", {"email": "Informe um e-mail válido."})
+                raise ApiError(422, "Campo preenchido incorretamente", {"email": "Informe um e-mail válido."})
             self.bot.check(payload, parsed.hostname, header(headers, "cf-connecting-ip") or "")
             account = self.account.find_active_by_email(raw_email)
             if account is not None and self.confirmation.issue_recovery(account.id):

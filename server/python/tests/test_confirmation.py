@@ -26,7 +26,7 @@ def test_confirmation_limits_and_inbox_belong_to_the_pending_session(world):
     world["clock"].advance(60)
     with pytest_raises(ApiError) as hourly:
         world["confirmation"].issue(account.id)
-    assert "três envios" in str(hourly.value)
+    assert "3 envios" in str(hourly.value)
     assert issued["expiresAt"] > issued["resendAt"]
 
 
@@ -39,7 +39,7 @@ def test_five_wrong_codes_block_the_challenge(world):
         assert wrong.value.status == 400
     with pytest_raises(ApiError) as blocked:
         world["confirmation"].check(account, "111111")
-    assert "Limite de tentativas" in str(blocked.value)
+    assert "excesso de tentativas" in str(blocked.value)
     with pytest_raises(ApiError) as exhausted:
         world["confirmation"].reveal(account)
     assert exhausted.value.status == 410

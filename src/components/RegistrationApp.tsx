@@ -96,7 +96,7 @@ function ProductPreview() {
       <div className="limit-bar" aria-hidden="true"><span /></div>
       <p><BellRing size={15} aria-hidden="true" /><span>Limite atingido. O alerta avisa; nenhum pagamento é bloqueado.</span></p>
     </div>
-    <p className="preview-foot">Ilustração do produto. Este protótipo cobre o cadastro, o perfil financeiro, lançamentos, importação, comprovantes e alertas inteligentes.</p>
+    <p className="preview-foot">Ilustração do produto. Cadastro, perfil financeiro, lançamentos, importação de extratos, leitura de comprovantes por IA e alertas de limite em um só lugar.</p>
   </aside>;
 }
 export default function RegistrationApp() {
@@ -229,20 +229,20 @@ export default function RegistrationApp() {
       setBusy(true);
       try {
         const data = await api<{ account: Account; resendAt: number }>('register', { ...values, turnstileToken: token });
-        resume(data.account); setResendAt(data.resendAt);
+        resume(data.account); setResendAt(data.resendAt); setNotice('Cadastro realizado com sucesso. Confirme seu e-mail para continuar');
       } catch (e) { showError(e); setBotReset(v => v + 1); }
       finally { setBusy(false); }
     } else if (step === 2) {
-      if (!/^\d{6}$/.test(code)) return invalid({ code: 'Informe os seis dígitos do código.' });
+      if (!/^\d{6}$/.test(code)) return invalid({ code: 'Informe o código de 6 dígitos enviado ao seu e-mail' });
       setBusy(true);
-      try { const data = await api<{ account: Account }>('confirm', { code }); resume(data.account); setInbox(null); setCode(''); }
+      try { const data = await api<{ account: Account }>('confirm', { code }); resume(data.account); setInbox(null); setCode(''); setNotice('E-mail confirmado com sucesso'); }
       catch (e) { showError(e); } finally { setBusy(false); }
     } else if (step === 3) {
       const data = { income: income === '' ? NaN : Number(income.replace(',', '.')), fixedExpenses: expenses === '' ? NaN : Number(expenses.replace(',', '.')), goal };
       const parsed = financeSchema.safeParse(data);
       if (!parsed.success) return invalid({ ...fieldErrors(parsed.error), ...(income === '' ? { income: 'Informe sua renda estimada, mesmo que seja zero.' } : {}), ...(expenses === '' ? { fixedExpenses: 'Informe seus gastos fixos estimados.' } : {}) });
       setBusy(true);
-      try { const result = await api<{ account: Account; dashboard?: DashboardData }>('finance', data); resume(result.account, result.dashboard); }
+      try { const result = await api<{ account: Account; dashboard?: DashboardData }>('finance', data); resume(result.account, result.dashboard); if (editing) setNotice('Perfil financeiro salvo com sucesso'); }
       catch (e) { showError(e); } finally { setBusy(false); }
     }
   }
@@ -298,7 +298,7 @@ export default function RegistrationApp() {
       });
       setRecoveryCode(''); setRecoveryPassword(''); setRecoveryConfirm(''); setRecoveryStep(0);
       setInbox(null); setView('login');
-      setNotice('Senha redefinida com sucesso. Entre com sua nova senha.');
+      setNotice('Senha redefinida com sucesso. Realize o login com sua nova senha');
     } catch (err) {
       showError(err);
     } finally { setBusy(false); }
@@ -309,7 +309,7 @@ export default function RegistrationApp() {
     try {
       await api('password', { currentPassword, newPassword, confirmPassword: confirmNewPassword });
       setModal(null); setCurrentPassword(''); setNewPassword(''); setConfirmNewPassword('');
-      setNotice('Senha alterada com sucesso. Outras sessões foram encerradas.');
+      setNotice('Senha alterada com sucesso');
     } catch (err) {
       if (err instanceof ApiError) {
         setPasswordError(err.message);
@@ -338,7 +338,7 @@ export default function RegistrationApp() {
   const descriptions = [
     'Usamos estes dados para identificar sua conta. CPF e e-mail não podem estar em outro cadastro.',
     'Você vai entrar com seu CPF ou e-mail e esta senha.',
-    'Digite o código de 6 dígitos. Neste protótipo nenhum e-mail é enviado: o código fica na caixa de demonstração.',
+    config?.emailMode === 'demo' ? 'Digite o código de 6 dígitos. Neste ambiente de demonstração nenhum e-mail é enviado: o código fica na caixa de demonstração.' : 'Digite o código de 6 dígitos que enviamos para o seu e-mail.',
     'Valores aproximados bastam. Eles são seu ponto de partida e podem ser ajustados depois.',
   ];
   const goalIcons = [Wallet, CreditCard, PiggyBank, TrendingUp];
@@ -399,10 +399,10 @@ export default function RegistrationApp() {
       <>
         <header className="site-header">
           <a className="brand" href="/" aria-label="ValorAI — início"><ProductMark /></a>
-          <span className="tag">Protótipo</span>
+          {config?.emailMode === 'demo' && <span className="tag">Demonstração</span>}
           <div className="header-actions">
             <ThemeToggle />
-            <button className="button button-ghost button-small header-about" onClick={() => setModal('about')}>Sobre o protótipo</button>
+            <button className="button button-ghost button-small header-about" onClick={() => setModal('about')}>Sobre o ValorAI</button>
             {account ? <button className="button button-secondary button-small" onClick={logout} disabled={busy || loadingSession}>Sair<LogOut size={16} /></button>
               : view !== 'deactivated' && <button className="button button-secondary button-small" disabled={loadingSession} onClick={() => switchView(view === 'login' ? 'register' : 'login')}>{view === 'login' ? 'Criar conta' : 'Entrar'}</button>}
           </div>
@@ -427,7 +427,7 @@ export default function RegistrationApp() {
                   <Field label="Cidade" id="city" error={errors.city}><input {...input('city', { list: 'city-options', autoComplete: 'address-level2', maxLength: 100 })} /><datalist id="city-options">{cities.map(c => <option key={c} value={c} />)}</datalist></Field>
                 </div>}
                 {step === 1 && <div className="fields-grid">
-                  <Field label="Seu e-mail" id="email" error={errors.email} wide hint="Use um endereço fictício: este protótipo não envia e-mails."><input {...input('email', { type: 'email', autoComplete: 'email', placeholder: 'voce@exemplo.com', maxLength: 200 })} /></Field>
+                  <Field label="Seu e-mail" id="email" error={errors.email} wide hint={config?.emailMode === 'demo' ? 'Ambiente de demonstração: use um endereço fictício, nenhum e-mail é enviado.' : 'Enviaremos um código de confirmação para este endereço.'}><input {...input('email', { type: 'email', autoComplete: 'email', placeholder: 'voce@exemplo.com', maxLength: 200 })} /></Field>
                   <Field label="Crie uma senha" id="password" error={errors.password} wide><div className="password-wrap"><input {...input('password', { type: showPassword ? 'text' : 'password', autoComplete: 'new-password', maxLength: 32 })} /><button type="button" className="icon-button" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></Field>
                   <ul className="password-rules wide" aria-label="Requisitos da senha">{['8 a 32 caracteres', 'Uma letra maiúscula', 'Um número'].map((text, i) => <li key={text} className={passwordRules[i] ? 'valid' : ''}><span aria-hidden="true">{passwordRules[i] && <Check size={11} strokeWidth={3} />}</span>{text}<i className="sr-only">{passwordRules[i] ? ': atendido' : ': pendente'}</i></li>)}</ul>
                   <Field label="Confirme a senha" id="confirmPassword" error={errors.confirmPassword} wide><input {...input('confirmPassword', { type: showPassword ? 'text' : 'password', autoComplete: 'new-password', maxLength: 32 })} /></Field>
@@ -454,12 +454,12 @@ export default function RegistrationApp() {
                 <div className="form-actions">{(step === 1 || editing) && <button type="button" className="button button-ghost" disabled={busy} onClick={() => { if (account?.completed) setView('dashboard'); else setStep(0); setError(''); }}><ArrowLeft size={18} />Voltar</button>}
                   <button className="button button-primary" type="submit" disabled={busy || loadingSession || (step === 1 && !!config?.siteKey && !token) || (step === 1 && !config)}>{busy || loadingSession ? <><LoaderCircle className="spin" size={18} />{loadingSession ? 'Carregando…' : 'Um instante…'}</> : <>{step === 0 ? 'Continuar' : step === 1 ? 'Criar minha conta' : step === 2 ? 'Confirmar código' : editing ? 'Salvar alterações' : 'Concluir cadastro'}<ArrowRight size={18} /></>}</button></div>
               </form>
-              {step === 2 && <div className="note"><Info size={16} /><span>A confirmação é simulada e não comprova que o e-mail pertence a você.</span></div>}
+              {step === 2 && config?.emailMode === 'demo' && <div className="note"><Info size={16} /><span>A confirmação é simulada e não comprova que o e-mail pertence a você.</span></div>}
               {step === 3 && <div className="note"><Info size={16} /><span>Estas estimativas não criam lançamentos nem limites de gastos.</span></div>}
               {step === 0 && <p className="form-switch">Já tem conta? <button type="button" className="link-button" onClick={() => switchView('login')}>Entrar</button></p>}
             </>}
             {view === 'login' && <>
-              <div className="page-heading"><h1 ref={heading} tabIndex={-1}>Entrar no ValorAI</h1><p>Acesse sua conta de demonstração com CPF ou e-mail.</p></div>
+              <div className="page-heading"><h1 ref={heading} tabIndex={-1}>Entrar no ValorAI</h1><p>Acesse sua conta com CPF ou e-mail.</p></div>
               {noticeAlert}{errorAlert}
               <form onSubmit={login}><div className="fields-grid">
                 <Field label="CPF ou e-mail" id="identifier" wide><input id="identifier" autoComplete="username" required disabled={busy || loadingSession} value={identifier} onChange={e => setIdentifier(e.target.value)} /></Field>
@@ -496,14 +496,14 @@ export default function RegistrationApp() {
           {(view === 'login' || view === 'register' || view === 'recovery') && <ProductPreview />}
           <div className="sr-only" aria-live="polite">{view === 'register' ? `Etapa ${step + 1} de 4: ${stepNames[step]}` : ''}</div>
         </main>
-        <footer className="site-footer"><div><span>Uma iniciativa</span><CompanyMark /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o protótipo</button></footer>
+        <footer className="site-footer"><div><span>Uma iniciativa</span><CompanyMark /></div><button className="link-button" onClick={() => setModal('about')}>Sobre o ValorAI</button></footer>
       </>
     )}
-    {modal === 'about' && <Modal title="Sobre este protótipo" onClose={() => setModal(null)}><div className="modal-body">
-      <p>Este ambiente demonstra o cadastro (RF001), a confirmação simulada (RF002), a manutenção do perfil cadastral (RF003), o perfil financeiro (RF004), os 3 canais de lançamentos, importação, leitura de comprovantes por IA, limites e metas.</p>
-      <div className="note"><Info size={16} /><span>Use dados fictícios e uma senha exclusiva para teste. Os dados ficam na Cloudflare. Não há envio de e-mail nem verificação real de titularidade.</span></div>
-      <p>A confirmação usa, provisoriamente, 10 minutos de validade, cinco tentativas e até três envios por hora, com intervalo de 60 segundos. Esses parâmetros ainda dependem de validação nos requisitos.</p>
-      <p>Os alertas de limites avisam você ao atingir ou superar o teto configurado sem bloquear nenhum lançamento. O protótipo não declara conformidade com a LGPD.</p>
+    {modal === 'about' && <Modal title="Sobre o ValorAI" onClose={() => setModal(null)}><div className="modal-body">
+      <p>O ValorAI reúne cadastro, confirmação de e-mail, perfil cadastral e financeiro, login com recuperação e alteração de senha, lançamentos manuais, importação de extratos OFX/CSV, leitura de comprovantes por IA com confirmação sua, 10 categorias padronizadas, limites com alertas, resumo financeiro por IA, metas e guias de educação financeira.</p>
+      <div className="note"><Info size={16} /><span>{config?.emailMode === 'demo' ? 'Ambiente de demonstração: use dados fictícios e uma senha exclusiva para teste. Nenhum e-mail é enviado e a confirmação não comprova a titularidade do endereço.' : 'Use uma senha exclusiva para o ValorAI. Seus dados ficam armazenados na Cloudflare.'}</span></div>
+      <p>O código de confirmação vale 10 minutos, permite 5 tentativas e até 3 envios por hora, com intervalo de 60 segundos. O código de recuperação de senha vale 15 minutos e segue limites próprios.</p>
+      <p>Os alertas de limites avisam você ao atingir ou superar o teto configurado sem bloquear nenhum lançamento. O ValorAI não declara conformidade plena com a LGPD.</p>
       <button className="button button-primary button-block" onClick={() => setModal(null)}>Entendi</button></div></Modal>}
     {modal === 'inbox' && <Modal title="Caixa de demonstração" onClose={() => setModal(null)}><div className="modal-body">{inboxError ? <p role="alert">{inboxError}</p> : inbox ? <>
       <dl className="mail-meta"><dt>De</dt><dd>ValorAI (simulado)</dd><dt>Para</dt><dd>{inbox.to}</dd><dt>Assunto</dt><dd>{inbox.subject || 'Seu código de confirmação'}</dd></dl>

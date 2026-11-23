@@ -47,10 +47,10 @@ class ConfirmationModule:
         previous = self._get(account_id)
         now = self.clock.now()
         if previous and previous.sent_at + RESEND_SECONDS > now:
-            raise ApiError(429, "Aguarde 60 segundos entre envios.")
+            raise ApiError(429, "Aguarde 60 segundos para reenviar")
         same_hour = bool(previous and previous.hour + 3600 > now)
         if same_hour and previous is not None and previous.sends >= MAX_SENDS:
-            raise ApiError(429, "Limite de três envios por hora atingido.")
+            raise ApiError(429, "Limite de 3 envios por hora atingido")
         challenge = Challenge(
             code=f"{self.numbers() % 1000000:06d}", expires=now + CONFIRM_SECONDS, attempts=0, sent_at=now,
             hour=previous.hour if same_hour and previous else now, sends=previous.sends + 1 if same_hour and previous else 1,
@@ -67,13 +67,13 @@ class ConfirmationModule:
     def check(self, account, code: object) -> None:
         if account.status != "pending":
             raise ApiError(409, "Essa etapa já foi concluída.")
-        challenge = self._live(account.id, "Código expirado ou bloqueado. Solicite outro.")
+        challenge = self._live(account.id, "Código expirado ou invalidado por excesso de tentativas. Solicite um novo código")
         if not isinstance(code, str) or len(code) != 6 or not code.isdigit() or code != challenge.code:
             challenge.attempts += 1
             self.codes.put(account.id, challenge.as_dict())
             if challenge.attempts >= MAX_ATTEMPTS:
-                raise ApiError(400, "Limite de tentativas atingido. Solicite outro código.")
-            raise ApiError(400, "Código incorreto. Confira os seis dígitos.")
+                raise ApiError(400, "Código expirado ou invalidado por excesso de tentativas. Solicite um novo código")
+            raise ApiError(400, "Código de verificação inválido. Verifique os dígitos informados")
 
     def discard(self, account_id: str) -> None:
         self.codes.delete(account_id)
@@ -109,20 +109,20 @@ class ConfirmationModule:
     def reveal_recovery(self, account) -> dict:
         challenge = self._get_recovery(account.id)
         if challenge is None or challenge.expires <= self.clock.now() or challenge.attempts >= RECOVERY_MAX_ATTEMPTS:
-            raise ApiError(410, "Código de recuperação expirado ou inexistente. Solicite outro.")
+            raise ApiError(410, "Código de recuperação inválido ou expirado")
         return {"code": challenge.code, "to": account.email, "expiresAt": challenge.expires, "simulated": True}
 
     def check_recovery(self, account_id: str, code: object) -> None:
         challenge = self._get_recovery(account_id)
         if challenge is None or challenge.expires <= self.clock.now() or challenge.attempts >= RECOVERY_MAX_ATTEMPTS:
-            raise ApiError(410, "Código inválido ou expirado. Solicite outro.")
+            raise ApiError(410, "Código de recuperação inválido ou expirado")
         if not isinstance(code, str) or len(code) != 6 or not code.isdigit() or code != challenge.code:
             challenge.attempts += 1
             if challenge.attempts >= RECOVERY_MAX_ATTEMPTS:
                 self.recovery_codes.delete(account_id)
-                raise ApiError(400, "Limite de tentativas atingido. Solicite outro código.")
+                raise ApiError(400, "Código expirado ou invalidado por excesso de tentativas. Solicite um novo código")
             self.recovery_codes.put(account_id, challenge.as_dict())
-            raise ApiError(400, "Código incorreto. Confira os seis dígitos.")
+            raise ApiError(400, "Código de verificação inválido. Verifique os dígitos informados")
 
     def discard_recovery(self, account_id: str) -> None:
         self.recovery_codes.delete(account_id)

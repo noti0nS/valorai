@@ -26,7 +26,7 @@ def test_password_rules_keep_the_last_failing_check():
 def test_registration_rejects_a_mismatch_and_missing_consent(clock):
     with pytest_raises(ApiError) as mismatch:
         registration_from(registration(confirmPassword="Different8"), clock.today())
-    assert mismatch.value.fields["confirmPassword"] == "As senhas precisam ser iguais."
+    assert mismatch.value.fields["confirmPassword"] == "As senhas não coincidem"
     with pytest_raises(ApiError) as consent:
         registration_from(registration(demoConsent=False), clock.today())
     assert consent.value.status == 422
@@ -45,12 +45,12 @@ def test_duplicate_identity_and_login_lockout(world):
     for _ in range(5):
         with pytest_raises(ApiError) as failed:
             world["account"].authenticate("missing@example.com", "WrongPass1", "ip")
-        assert "cinco minutos" not in str(failed.value)
+        assert "5 minutos" not in str(failed.value)
     assert world["hasher"].hashed[-1] == "WrongPass1"
     with pytest_raises(ApiError) as blocked:
         world["account"].authenticate("missing@example.com", "WrongPass1", "ip")
     assert blocked.value.status == 401
-    assert "cinco minutos" in str(blocked.value)
+    assert "5 minutos" in str(blocked.value)
     signed_in = world["account"].authenticate(created.email, "TestingOnly8", "ip")
     world["accounts"].deactivate(signed_in.id)
     with pytest_raises(ApiError):
