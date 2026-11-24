@@ -347,7 +347,7 @@ class LedgerModule:
             if isinstance(new_category, str) and new_category.strip():
                 cat = standard_category(new_category)
                 if cat is None:
-                    raise ApiError(422, "Selecione uma das categorias padronizadas.", {"category": "Categoria inválida."})
+                    raise ApiError(422, "Selecione uma categoria padronizada obrigatória", {"category": "Categoria inválida."})
             else:
                 cat = existing.category
             updated = replace(existing, validated=True, category=cat)
@@ -395,7 +395,7 @@ class LedgerModule:
                 raise ApiError(422, "Selecione ou cole o conteúdo de um arquivo CSV, Excel ou OFX.", {"content": "Arquivo vazio."})
             parsed_items = self.parse_import_content(account, format_hint, file_name, content)
             if not parsed_items:
-                raise ApiError(422, "Nenhum lançamento válido foi encontrado no arquivo enviado.", {"content": "Formato não reconhecido ou sem linhas válidas."})
+                raise ApiError(422, "Formato de arquivo não suportado ou nenhuma transação encontrada no extrato", {"content": "Formato não reconhecido ou sem linhas válidas."})
 
         if preview_only:
             return {
@@ -447,7 +447,7 @@ class LedgerModule:
         if confirm:
             tx_data = payload.get("transaction")
             if not isinstance(tx_data, dict):
-                raise ApiError(422, "Confira os dados extraídos do comprovante antes de salvar.")
+                raise ApiError(422, "Campo preenchido incorretamente")
             merged = {
                 **tx_data,
                 "channel": "photo",
@@ -515,14 +515,14 @@ class LedgerModule:
         if scope == "category":
             canonical = standard_category(category)
             if canonical is None:
-                raise ApiError(422, "Selecione uma das categorias padronizadas.", {"category": "Categoria inválida."})
+                raise ApiError(422, "Selecione uma categoria padronizada obrigatória", {"category": "Categoria inválida."})
             category = canonical
         elif not (2 <= len(category) <= 60):
             raise ApiError(422, "Informe a categoria ou identificação do limite.", {"category": "Informe a categoria."})
 
         limit_cents = to_cents(payload.get("limit"))
         if limit_cents is None or limit_cents <= 0:
-            raise ApiError(422, "Informe um valor maior que zero para o limite.", {"limit": "Informe um valor válido maior que zero."})
+            raise ApiError(422, "Informe um valor monetário válido maior que R$ 0,00", {"limit": "Informe um valor válido maior que zero."})
         if scope == "card_share" and limit_cents > 10_000:
             raise ApiError(422, "O percentual máximo deve estar entre 1% e 100%.", {"limit": "Informe entre 1% e 100%."})
 
@@ -950,7 +950,7 @@ class LedgerModule:
             cents_parsed, _ = parse_Flexible_amount(payload.get("amount"))
             amount_cents = cents_parsed
         if amount_cents is None or amount_cents <= 0:
-            errors["amount"] = "Informe um valor maior que zero."
+            errors["amount"] = "Informe um valor maior que R$ 0,00"
 
         raw_kind = payload.get("kind")
         kind = raw_kind if isinstance(raw_kind, str) and raw_kind in KINDS else "variable_expense"
@@ -959,14 +959,14 @@ class LedgerModule:
         if isinstance(raw_category, str) and raw_category.strip() and raw_category.strip().lower() != "auto":
             category = standard_category(raw_category)
             if category is None:
-                errors["category"] = "Selecione uma das categorias padronizadas."
+                errors["category"] = "Selecione uma categoria padronizada obrigatória"
                 category = "Outros"
         elif isinstance(title, str) and title.strip():
             category, inferred_kind = suggest_category(title, kind if raw_kind in KINDS else None)
             if raw_kind not in KINDS:
                 kind = inferred_kind
         else:
-            errors["category"] = "Selecione ou informe uma categoria."
+            errors["category"] = "Selecione uma categoria padronizada obrigatória"
             category = "Outros"
 
         raw_date = payload.get("occurredOn")
@@ -985,7 +985,7 @@ class LedgerModule:
         payment_method = raw_method if raw_method in PAYMENT_METHODS else "debit"
 
         if errors:
-            raise ApiError(422, "Confira os campos do lançamento.", errors)
+            raise ApiError(422, "Campo(s) obrigatório(s) não preenchido(s)", errors)
 
         assert isinstance(title, str) and isinstance(amount_cents, int)
         merchant_doc = str(payload.get("merchantDoc") or "").strip()[:60] or None

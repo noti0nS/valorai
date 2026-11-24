@@ -74,7 +74,7 @@ class AccountModule:
         failure = self._attempt(key)
         now = self.clock.now()
         if failure and failure.blocked_until > now:
-            raise ApiError(401, "Identificador ou senha inválidos. Se houve várias tentativas, aguarde cinco minutos.")
+            raise ApiError(401, "Conta temporariamente bloqueada por excesso de tentativas. Aguarde 5 minutos e tente novamente")
         if account:
             matches = self.hasher.verify(secret, account.password_hash)
         else:
@@ -160,12 +160,12 @@ class AccountModule:
         if pw_error:
             errors["newPassword"] = pw_error
         if new_password != confirm_password:
-            errors["confirmPassword"] = "As senhas precisam ser iguais."
+            errors["confirmPassword"] = "As senhas não coincidem"
         if errors:
-            raise ApiError(422, "Confira os campos destacados.", errors)
+            raise ApiError(422, "Campo preenchido incorretamente", errors)
         account = self.find_active_by_email(email)
         if account is None:
-            raise ApiError(410, "Código inválido ou expirado. Solicite outro.")
+            raise ApiError(410, "Código de recuperação inválido ou expirado")
         confirmation.check_recovery(account.id, code)
         assert isinstance(new_password, str)
         self.accounts.update_password(account.id, self.hasher.hash(new_password))
@@ -177,14 +177,14 @@ class AccountModule:
         errors: dict[str, str] = {}
         secret = current_password if isinstance(current_password, str) else ""
         if len(secret) > 32 or not self.hasher.verify(secret, account.password_hash):
-            errors["currentPassword"] = "Senha atual incorreta."
+            errors["currentPassword"] = "A senha atual informada está incorreta"
         pw_error = password_message(new_password)
         if pw_error:
             errors["newPassword"] = pw_error
         if new_password != confirm_password:
-            errors["confirmPassword"] = "As senhas precisam ser iguais."
+            errors["confirmPassword"] = "As senhas não coincidem"
         if errors:
-            raise ApiError(422, "Confira os campos destacados.", errors)
+            raise ApiError(422, "Campo preenchido incorretamente", errors)
         assert isinstance(new_password, str)
         self.accounts.update_password(account.id, self.hasher.hash(new_password))
         sessions.revoke_all(account.id)

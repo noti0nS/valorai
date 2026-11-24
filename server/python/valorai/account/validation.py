@@ -88,11 +88,11 @@ def registration_from(body: dict, today: datetime) -> Registration:
     if password_error:
         errors["password"] = password_error
     if body.get("password") != body.get("confirmPassword"):
-        errors["confirmPassword"] = "As senhas precisam ser iguais."
+        errors["confirmPassword"] = "As senhas não coincidem"
     if body.get("demoConsent") is not True:
-        errors["demoConsent"] = "Confirme que está testando o protótipo."
+        errors["demoConsent"] = "Aceite o termo de consentimento para continuar."
     if errors:
-        raise ApiError(422, "Confira os campos destacados.", errors)
+        raise ApiError(422, "Campo preenchido incorretamente", errors)
     assert isinstance(name, str) and isinstance(cpf, str) and isinstance(phone, str)
     assert isinstance(postal, str) and isinstance(state, str) and isinstance(city, str)
     assert isinstance(email, str) and isinstance(body.get("password"), str)
@@ -155,7 +155,7 @@ def profile_update_from(body: dict, today: datetime, current_cpf: str) -> Profil
             errors["avatar"] = "Envie uma imagem em JPG, PNG ou WebP."
 
     if errors:
-        raise ApiError(422, "Confira os campos destacados.", errors)
+        raise ApiError(422, "Campo preenchido incorretamente", errors)
     assert isinstance(name, str) and isinstance(state, str) and isinstance(city, str)
     birth = body.get("birthDate")
     assert isinstance(birth, str)

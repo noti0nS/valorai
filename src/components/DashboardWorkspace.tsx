@@ -1024,7 +1024,7 @@ export default function DashboardWorkspace({
       });
       onRefreshDashboard(res.dashboard);
       setActiveModal(null);
-      setNotice(editingTxId ? 'Lançamento atualizado com sucesso.' : 'Lançamento registrado no livro caixa.');
+      setNotice(editingTxId ? 'Movimentação atualizada' : 'Movimentação registrada com sucesso');
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Não foi possível salvar o lançamento.');
     } finally {
@@ -1038,7 +1038,7 @@ export default function DashboardWorkspace({
     try {
       const res = await apiCall<{ dashboard: DashboardData }>('transactions', { action: 'delete', id });
       onRefreshDashboard(res.dashboard);
-      setNotice('Lançamento removido.');
+      setNotice('Movimentação excluída');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível excluir.');
     } finally {
@@ -1128,7 +1128,7 @@ export default function DashboardWorkspace({
       });
       onRefreshDashboard(res.dashboard);
       setActiveModal(null);
-      setNotice('Comprovante extraído via IA e lançado com categoria validada.');
+      setNotice('Comprovante lançado com sucesso');
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Não foi possível confirmar o comprovante.');
     } finally {
@@ -1174,7 +1174,7 @@ export default function DashboardWorkspace({
       onRefreshDashboard(res.dashboard);
       setActiveModal(null);
       setNotice(
-        `Importação concluída: ${res.importResult.importedCount} lançamento(s) importado(s)` +
+        `Extrato importado e conciliado com sucesso: ${res.importResult.importedCount} lançamento(s)` +
           (res.importResult.duplicateCount ? ` (${res.importResult.duplicateCount} duplicado(s) ignorado(s)).` : '.')
       );
     } catch (err) {
@@ -1203,7 +1203,7 @@ export default function DashboardWorkspace({
       });
       onRefreshDashboard(res.dashboard);
       setActiveModal(null);
-      setNotice('Limite orçamentário salvo. Alertas informativos atualizados.');
+      setNotice('Limite orçamentário configurado com sucesso');
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Não foi possível salvar o limite.');
     } finally {
@@ -1246,7 +1246,7 @@ export default function DashboardWorkspace({
       });
       onRefreshDashboard(res.dashboard, res.account);
       setActiveModal(null);
-      setNotice(contribNum > 0 ? `Aporte de ${currency(contribNum)} registrado na sua meta.` : 'Parâmetros da meta prioritária atualizados.');
+      setNotice(contribNum > 0 ? 'Aporte registrado com sucesso' : 'Meta financeira atualizada com sucesso');
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Não foi possível atualizar a meta.');
     } finally {
@@ -1285,7 +1285,7 @@ export default function DashboardWorkspace({
         onRefreshDashboard(dashboard, res.account, res.profile);
       }
       setActiveModal(null);
-      setNotice('Dados cadastrais atualizados e registrados no histórico.');
+      setNotice('Perfil cadastral atualizado com sucesso');
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Não foi possível atualizar o perfil.');
     } finally {
@@ -1443,7 +1443,7 @@ export default function DashboardWorkspace({
                   )}
                   <div>
                     <dt>Confirmação</dt>
-                    <dd>Demonstração</dd>
+                    <dd>{account.status === 'demo_confirmed' ? 'Simulada (demonstração)' : 'E-mail confirmado'}</dd>
                   </div>
                 </dl>
                 <div className="dropdown-group">
@@ -1461,7 +1461,7 @@ export default function DashboardWorkspace({
                   </button>
                   <button type="button" className="dropdown-item" onClick={() => run(onOpenAbout)}>
                     <Info size={18} aria-hidden="true" />
-                    <span>Sobre o protótipo</span>
+                    <span>Sobre o ValorAI</span>
                   </button>
                   <hr className="dropdown-sep" />
                   <button type="button" className="dropdown-item" disabled={sessionBusy} onClick={() => run(onLogout)}>
@@ -2288,7 +2288,7 @@ export default function DashboardWorkspace({
               </div>
             ) : (
               <div className="guides-empty-state">
-                <p>Nenhum guia encontrado para os filtros selecionados.</p>
+                <p>Nenhum guia encontrado para o termo informado.</p>
                 <button
                   type="button"
                   className="button button-secondary button-small"
@@ -2311,7 +2311,7 @@ export default function DashboardWorkspace({
           <CompanyMark />
         </div>
         <div className="dash-footer-meta">
-          <button type="button" className="text-link muted" onClick={onOpenAbout}>Sobre o protótipo</button>
+          <button type="button" className="text-link muted" onClick={onOpenAbout}>Sobre o ValorAI</button>
           <span aria-hidden="true">•</span>
           <span>Ciclo ativo {cycleCode}</span>
         </div>
@@ -2509,7 +2509,7 @@ export default function DashboardWorkspace({
                     </p>
                     {aiEnabled && aiTier === 'free_prototype' && (
                       <p className="field-hint">
-                        Protótipo Free Tier: utilize comprovantes de teste ou sem dados bancários sensíveis reais.
+                        Plano gratuito de IA: evite enviar comprovantes com dados bancários sensíveis reais.
                       </p>
                     )}
 
@@ -2819,7 +2819,7 @@ export default function DashboardWorkspace({
             </div>
 
             <div className="sample-presets">
-              <span className="field-hint">Ou carregue um arquivo demonstrativo para testar a conciliação:</span>
+              <span className="field-hint">Ou carregue um arquivo de exemplo para ver a conciliação:</span>
               <div className="preset-buttons">
                 <button
                   type="button"
